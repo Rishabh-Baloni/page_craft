@@ -129,11 +129,14 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
     try:
         from docx import Document
         from reportlab.lib.pagesizes import letter, A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image as RLImage
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import inch
         from reportlab.lib import colors
         from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+        from PIL import Image
+        import zipfile
+        import io
         
         # Read the Word document
         doc = Document(word_file)
@@ -225,6 +228,72 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
                     p = Paragraph(formatted_text, para_style)
                     story.append(p)
                     story.append(Spacer(1, 6))
+        
+        # Process images from the document
+        image_count = 0
+        try:
+            # Extract all images from the Word document
+            for rel_id, rel in doc.part.rels.items():
+                if "image" in rel.target_ref:
+                    try:
+                        image_count += 1
+                        # Get image data
+                        image_data = rel.target_part.blob
+                        
+                        # Create temporary image file
+                        temp_image = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                        temp_image.write(image_data)
+                        temp_image.close()
+                        
+                        # Add image to PDF
+                        try:
+                            # Get image dimensions and resize if needed
+                            with Image.open(temp_image.name) as img:
+                                img_width, img_height = img.size
+                                
+                                # Calculate size to fit in page (max 6 inches wide)
+                                max_width = 6 * inch
+                                max_height = 4 * inch
+                                
+                                # Maintain aspect ratio
+                                if img_width > max_width:
+                                    ratio = max_width / img_width
+                                    new_width = max_width
+                                    new_height = img_height * ratio
+                                else:
+                                    new_width = min(img_width * 0.75, max_width)  # Convert pixels to points
+                                    new_height = min(img_height * 0.75, max_height)
+                                
+                                if new_height > max_height:
+                                    ratio = max_height / new_height
+                                    new_width *= ratio
+                                    new_height = max_height
+                            
+                            # Add image title
+                            if image_count == 1:
+                                story.append(Spacer(1, 12))
+                                img_title = Paragraph("<b>Images from Document:</b>", normal_style)
+                                story.append(img_title)
+                                story.append(Spacer(1, 6))
+                            
+                            # Add image to story
+                            rl_image = RLImage(temp_image.name, width=new_width, height=new_height)
+                            story.append(rl_image)
+                            story.append(Spacer(1, 12))
+                            
+                        except Exception as img_error:
+                            print(f"Warning: Could not process image {image_count}: {img_error}")
+                        
+                        # Clean up temp file
+                        try:
+                            os.unlink(temp_image.name)
+                        except:
+                            pass
+                            
+                    except Exception as e:
+                        print(f"Warning: Could not extract image {image_count}: {e}")
+        except Exception as e:
+            print(f"Warning: Could not process images: {e}")
         
         # Process tables
         for table in doc.tables:
