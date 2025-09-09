@@ -1,4 +1,4 @@
-# 📄 Paper Craft Bot
+# 📄 Page Craft Bot
 
 A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF operations, and file management.
 
@@ -17,7 +17,7 @@ A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd paper-craft-bot
+   cd page-craft-bot
    ```
 
 2. **Set up virtual environment**
@@ -63,7 +63,7 @@ A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF
    - Select the forked repository
 
 3. **Configure the service**
-   - **Name**: `paper-craft-bot` (or any name you prefer)
+   - **Name**: `page-craft-bot` (or any name you prefer)
    - **Environment**: `Python 3`
    - **Build Command**: `pip install -r requirements.txt`
    - **Start Command**: `python main.py`
@@ -107,7 +107,7 @@ A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF
 ## 📁 Project Structure
 
 ```
-paper-craft-bot/
+page-craft-bot/
 ├── bot/
 │   └── bot.py              # Main bot logic
 ├── utils/

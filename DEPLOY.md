@@ -1,4 +1,4 @@
-# 🚀 Paper Craft Bot - Render Deployment Guide
+# 🚀 Page Craft Bot - Render Deployment Guide
 
 ## GitHub Setup
 
@@ -6,17 +6,17 @@
    ```bash
    git init
    git add .
-   git commit -m "Initial commit: Paper Craft Bot"
+   git commit -m "Initial commit: Page Craft Bot"
    ```
 
 2. **Create GitHub Repository**
    - Go to GitHub.com and create a new repository
-   - Name it: `paper-craft-bot`
+   - Name it: `page-craft-bot`
    - Don't initialize with README (we already have one)
 
 3. **Push to GitHub**
    ```bash
-   git remote add origin https://github.com/YOUR_USERNAME/paper-craft-bot.git
+   git remote add origin https://github.com/YOUR_USERNAME/page-craft-bot.git
    git branch -M main
    git push -u origin main
    ```
@@ -32,10 +32,10 @@
 2. **Create New Web Service**
    - Click "New" → "Web Service"
    - Click "Connect" next to your GitHub account
-   - Select the `paper-craft-bot` repository
+   - Select the `page-craft-bot` repository
 
 3. **Configure Service Settings**
-   - **Name**: `paper-craft-bot` (or your preferred name)
+   - **Name**: `page-craft-bot` (or your preferred name)
    - **Environment**: `Python 3`
    - **Region**: Choose closest to your location
    - **Branch**: `main`
@@ -60,8 +60,8 @@
 1. Open Telegram and search for `@BotFather`
 2. Start a chat and send `/newbot`
 3. Follow the prompts:
-   - Bot name: `Paper Craft Bot` (or your choice)
-   - Bot username: `papercraft_bot` (must end with 'bot')
+   - Bot name: `Page Craft Bot` (or your choice)
+   - Bot username: `pagecraft_bot` (must end with 'bot')
 4. Copy the token that BotFather gives you
 5. Use this token as your `BOT_TOKEN` in Render
 

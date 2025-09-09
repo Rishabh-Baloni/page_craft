@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Paper Craft Bot - Entry Point
+Page Craft Bot - Entry Point
 A powerful Telegram bot for document processing and Word-to-PDF conversion.
 """
 
@@ -30,7 +30,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
-            self.wfile.write(b'Paper Craft Bot is running!')
+            self.wfile.write(b'Page Craft Bot is running!')
         else:
             self.send_response(404)
             self.end_headers()
@@ -60,7 +60,7 @@ def main():
         web_thread = Thread(target=run_web_server, daemon=True)
         web_thread.start()
         
-        logger.info("🚀 Starting Paper Craft Bot...")
+        logger.info("🚀 Starting Page Craft Bot...")
         start_bot()
         
     except KeyboardInterrupt:

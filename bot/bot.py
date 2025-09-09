@@ -1,4 +1,4 @@
-﻿# Paper Craft Bot - Optimized for Performance
+﻿# Page Craft Bot - Optimized for Performance
 import os
 import tempfile
 import logging
@@ -40,7 +40,7 @@ def find_replied_pdf(update: Update, user_id: int):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
     await update.message.reply_text(
-        "📄 Paper Craft Bot\n\n"
+        "📄 Page Craft Bot\n\n"
         "Upload files and use:\n"
         "• 📄 PDFs: /merge, /split, /to_images\n"
         "• 📝 Word docs: Converts to PDF automatically\n"
@@ -51,7 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command handler"""
     help_message = """
-📄 Paper Craft Bot Commands:
+📄 Page Craft Bot Commands:
 
 📤 **Upload PDFs** then use:
 
@@ -925,5 +925,5 @@ def start_bot():
     
     app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, handle_unknown_command))
     
-    print("🚀 Paper Craft Bot is starting...")
+    print("🚀 Page Craft Bot is starting...")
     app.run_polling()
