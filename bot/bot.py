@@ -4,7 +4,13 @@ import tempfile
 import logging
 import shutil
 import gc
-import psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("Note: psutil not available - memory monitoring disabled for local testing")
+
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
@@ -32,8 +38,11 @@ RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', None)
 def get_memory_usage():
     """Get current memory usage in MB"""
     try:
-        process = psutil.Process(os.getpid())
-        return process.memory_info().rss / 1024 / 1024
+        if PSUTIL_AVAILABLE:
+            process = psutil.Process(os.getpid())
+            return process.memory_info().rss / 1024 / 1024
+        else:
+            return 0  # No monitoring available locally
     except:
         return 0
 
@@ -44,7 +53,7 @@ def cleanup_memory():
 def check_memory_limit():
     """Check if we're approaching memory limits"""
     memory_mb = get_memory_usage()
-    if memory_mb > MAX_TOTAL_MEMORY_MB:
+    if memory_mb > MAX_TOTAL_MEMORY_MB and memory_mb > 0:
         logging.warning(f"High memory usage: {memory_mb:.1f}MB")
         cleanup_memory()
         return False
@@ -412,9 +421,14 @@ async def handle_word_document(update: Update, context: ContextTypes.DEFAULT_TYP
         word_file_path = os.path.join(temp_dir, file_name)
         await file.download_to_drive(word_file_path)
         
-        # Convert to PDF
+        # Convert to PDF using lazy import
         pdf_filename = file_name.rsplit('.', 1)[0] + '.pdf'
         pdf_file_path = os.path.join(temp_dir, pdf_filename)
+        
+        _, _, _, _, word_to_pdf = lazy_import_pdf_utils()
+        if word_to_pdf is None:
+            await status_message.edit_text("❌ PDF utilities not available.")
+            return
         
         word_to_pdf(word_file_path, pdf_file_path)
         
@@ -653,7 +667,12 @@ async def merge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         temp_dir = tempfile.mkdtemp()
         merged_file = os.path.join(temp_dir, "merged.pdf")
         
-        # Merge PDFs
+        # Merge PDFs using lazy import
+        merge_pdfs, _, _, _, _ = lazy_import_pdf_utils()
+        if merge_pdfs is None:
+            await update.message.reply_text("❌ PDF utilities not available.")
+            return
+        
         file_paths = [f['path'] for f in selected_files]
         merge_pdfs(file_paths, merged_file)
         
@@ -735,7 +754,12 @@ async def merge_with_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         temp_dir = tempfile.mkdtemp()
         merged_file = os.path.join(temp_dir, "merged.pdf")
         
-        # Merge PDFs
+        # Merge PDFs using lazy import
+        merge_pdfs, _, _, _, _ = lazy_import_pdf_utils()
+        if merge_pdfs is None:
+            await update.message.reply_text("❌ PDF utilities not available.")
+            return
+        
         file_paths = [f['path'] for f in selected_files]
         merge_pdfs(file_paths, merged_file)
         
@@ -787,7 +811,12 @@ async def split_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             pdf_path = selected_file['path']
             
-            # Split PDF
+            # Split PDF using lazy import
+            _, split_pdf, _, _, _ = lazy_import_pdf_utils()
+            if split_pdf is None:
+                await status_message.edit_text("❌ PDF utilities not available.")
+                return
+            
             split_file = split_pdf(pdf_path, page_range, output_path)
             
             # Update status
@@ -840,7 +869,12 @@ async def split_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         pdf_path = selected_file['path']
         
-        # Split PDF
+        # Split PDF using lazy import
+        _, split_pdf, _, _, _ = lazy_import_pdf_utils()
+        if split_pdf is None:
+            await status_message.edit_text("❌ PDF utilities not available.")
+            return
+        
         split_file = split_pdf(pdf_path, page_range, output_path)
         
         # Update status
