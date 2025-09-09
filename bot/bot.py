@@ -915,16 +915,14 @@ async def split_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Error splitting PDF: {error_msg}")
 
 async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Convert PDF to images command handler (disabled for memory optimization)"""
-    await update.message.reply_text(
-        "🚫 **PDF to Images Conversion Disabled**\n\n"
-        "This feature has been disabled to optimize memory usage on the free tier.\n\n"
-        "✅ **Available features:**\n"
-        "• PDF merge and split operations\n"
-        "• Word to PDF conversion\n"
-        "• File management commands\n\n"
-        "💡 Use /merge or /split for PDF operations!"
-    )
+    """Convert PDF to images command handler"""
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service temporarily busy. Please try again.")
+        return
+        
+    await wake_service_on_activity()
+    
+    user_id = update.effective_user.id
     
     # Check if this is a reply to a PDF
     replied_pdf = find_replied_pdf(update, user_id)
@@ -940,8 +938,14 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             temp_dir = tempfile.mkdtemp()
             images_dir = os.path.join(temp_dir, "images")
             
+            # Get PDF utilities
+            _, _, pdf_to_images_func, create_zip_from_images, _ = lazy_import_pdf_utils()
+            if pdf_to_images_func is None or create_zip_from_images is None:
+                await update.message.reply_text("❌ PDF utilities not available.")
+                return
+            
             # Convert to images
-            image_paths = pdf_to_images(pdf_path, images_dir)
+            image_paths = pdf_to_images_func(pdf_path, images_dir)
             
             # Create ZIP file
             zip_filename = f"images_{selected_file['name'].replace('.pdf', '')}.zip"
@@ -949,23 +953,19 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             zip_file = create_zip_from_images(image_paths, zip_path)
             
             # Ask for filename instead of sending directly
-            operation_info = f"Converted {len(image_paths)} pages from {selected_file['name']} to PNG images!"
+            operation_info = f"Converted {len(image_paths)} pages from {selected_file['name']} to images!"
             return await ask_for_filename(update, context, zip_file, "zip", operation_info)
             
         except Exception as e:
             error_msg = str(e)
-            if "poppler" in error_msg.lower():
-                await update.message.reply_text(
-                    "❌ PDF to images conversion requires Poppler.\n"
-                    "📋 This feature works when the bot is deployed on Render/Heroku.\n"
-                    "🔗 For now, try /merge or /split commands which work locally!\n\n"
-                    "💡 **TIP**: Reply to any PDF with /to_images"
-                )
-            else:
-                await update.message.reply_text(f"❌ Error converting PDF: {error_msg}")
+            await update.message.reply_text(f"❌ Error converting PDF to images: {error_msg}")
         return
     
     # Regular to_images command logic
+    if user_id not in user_files or not user_files[user_id]:
+        await update.message.reply_text("❌ No PDFs uploaded. Please upload a PDF first.")
+        return
+        
     try:
         if len(context.args) > 0:
             file_number = int(context.args[0])
@@ -983,8 +983,14 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         temp_dir = tempfile.mkdtemp()
         images_dir = os.path.join(temp_dir, "images")
         
+        # Get PDF utilities
+        _, _, pdf_to_images_func, create_zip_from_images, _ = lazy_import_pdf_utils()
+        if pdf_to_images_func is None or create_zip_from_images is None:
+            await update.message.reply_text("❌ PDF utilities not available.")
+            return
+        
         # Convert to images
-        image_paths = pdf_to_images(pdf_path, images_dir)
+        image_paths = pdf_to_images_func(pdf_path, images_dir)
         
         # Create ZIP file
         zip_filename = f"images_{selected_file['name'].replace('.pdf', '')}.zip"
@@ -992,20 +998,14 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         zip_file = create_zip_from_images(image_paths, zip_path)
         
         # Ask for filename instead of sending directly
-        operation_info = f"Converted {len(image_paths)} pages from {selected_file['name']} to PNG images!"
+        operation_info = f"Converted {len(image_paths)} pages from {selected_file['name']} to images!"
         return await ask_for_filename(update, context, zip_file, "zip", operation_info)
         
+    except ValueError:
+        await update.message.reply_text("❌ Invalid file number. Use /list to see your files.")
     except Exception as e:
         error_msg = str(e)
-        if "poppler" in error_msg.lower():
-            await update.message.reply_text(
-                "❌ PDF to images conversion requires Poppler.\n"
-                "📋 This feature works when the bot is deployed on Render/Heroku.\n"
-                "🔗 For now, try /merge or /split commands which work locally!\n\n"
-                "💡 **TIP**: Reply to any PDF with /to_images"
-            )
-        else:
-            await update.message.reply_text(f"❌ Error converting PDF: {error_msg}")
+        await update.message.reply_text(f"❌ Error converting PDF to images: {error_msg}")
 
 def start_bot():
     """Start the bot with conflict prevention"""
