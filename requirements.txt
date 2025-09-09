@@ -1,0 +1,6 @@
+python-telegram-bot
+pypdf
+pdf2image
+python-docx
+reportlab
+docx2pdf
