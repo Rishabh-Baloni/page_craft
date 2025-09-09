@@ -32,8 +32,13 @@ MAX_FILES_PER_USER = 5  # Reduced from 20
 MAX_FILE_SIZE_MB = 10   # Limit individual file size
 MAX_TOTAL_MEMORY_MB = 200  # Total memory limit
 
-# Render self-wake mechanism (only if URL provided)
+# Enhanced auto-wake system for Render
 RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', None)
+AUTO_WAKE_ENABLED = True
+WAKE_URLS = [
+    "https://page-craft.onrender.com",
+    "https://page-craft.onrender.com/health"
+]
 
 def get_memory_usage():
     """Get current memory usage in MB"""
@@ -90,16 +95,100 @@ def lazy_import_pdf_utils():
         return None, None, None, None, None
 
 async def wake_service_on_activity():
-    """Lightweight service wake - only if memory allows"""
-    if not RENDER_URL or not check_memory_limit():
+    """Enhanced auto-wake system with multiple strategies"""
+    if not AUTO_WAKE_ENABLED:
         return
         
+    import threading
+    
+    def wake_service():
+        """Background wake-up function"""
+        try:
+            import urllib.request
+            import time
+            
+            # Strategy 1: Immediate wake-up on user activity
+            for url in WAKE_URLS:
+                try:
+                    response = urllib.request.urlopen(url, timeout=5)
+                    if response.getcode() == 200:
+                        print(f"🚀 Service woke up successfully via {url}")
+                        break
+                except Exception as e:
+                    print(f"⚠️ Wake attempt failed for {url}: {e}")
+                    continue
+                    
+            # Strategy 2: Keep-alive ping
+            if RENDER_URL:
+                try:
+                    urllib.request.urlopen(f"{RENDER_URL}/", timeout=3)
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"⚠️ Wake service error: {e}")
+    
+    # Run wake-up in background thread to not block user interaction
     try:
-        # Simple HTTP request without heavy async client
+        wake_thread = threading.Thread(target=wake_service, daemon=True)
+        wake_thread.start()
+    except Exception as e:
+        print(f"⚠️ Failed to start wake thread: {e}")
+
+def start_auto_wake_service():
+    """Start background auto-wake service to prevent sleeping"""
+    if not AUTO_WAKE_ENABLED:
+        return
+        
+    import threading
+    import time
+    
+    def periodic_wake():
+        """Keep service awake with periodic pings"""
+        while True:
+            try:
+                # Wait 8 minutes between wake-ups (Render sleeps after 15 min)
+                time.sleep(480)  
+                
+                # Ping multiple endpoints
+                import urllib.request
+                for url in WAKE_URLS:
+                    try:
+                        response = urllib.request.urlopen(url, timeout=5)
+                        if response.getcode() == 200:
+                            print("🔄 Auto-wake ping successful")
+                            break
+                    except:
+                        continue
+                        
+            except Exception as e:
+                print(f"⚠️ Auto-wake error: {e}")
+    
+    # Start the auto-wake thread
+    try:
+        wake_thread = threading.Thread(target=periodic_wake, daemon=True)
+        wake_thread.start()
+        print("🚀 Auto-wake service started (8-minute intervals)")
+    except Exception as e:
+        print(f"⚠️ Failed to start auto-wake: {e}")
+
+def emergency_wake():
+    """Emergency wake-up for critical bot operations"""
+    try:
         import urllib.request
-        urllib.request.urlopen(f"{RENDER_URL}/health", timeout=5)
-    except Exception:
-        pass  # Silent fail to save memory
+        
+        # Try to wake the service immediately
+        for url in WAKE_URLS:
+            try:
+                response = urllib.request.urlopen(url, timeout=10)
+                if response.getcode() == 200:
+                    print(f"🆘 Emergency wake successful via {url}")
+                    return True
+            except:
+                continue
+        return False
+    except:
+        return False
 
 def find_replied_pdf(update: Update, user_id: int):
     """Find the PDF file that was replied to"""
@@ -496,7 +585,8 @@ async def handle_image_document(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle any document upload and route to appropriate handler"""
-    # Wake service on user activity
+    # Emergency wake for file uploads (critical operation)
+    emergency_wake()
     await wake_service_on_activity()
     
     mime_type = update.message.document.mime_type
@@ -1115,6 +1205,9 @@ def start_bot():
     """Start the bot with conflict prevention"""
     print("🔍 Testing PDF utilities import at startup...")
     print(f"Current working directory: {os.getcwd()}")
+    
+    # Start auto-wake service to prevent sleeping
+    start_auto_wake_service()
     
     # Test PDF utilities import
     merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, image_to_pdf = lazy_import_pdf_utils()
