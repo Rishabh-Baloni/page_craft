@@ -200,12 +200,12 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.styles import getSampleStyleSheet
         
-        print("⚠️ Using basic text conversion (formatting may be lost)")
+        print("⚠️ Using basic text conversion (formatting and images will be lost)")
         
         # Read the Word document
         doc = Document(word_file)
         
-        # Create PDF
+        # Create PDF with better error handling
         pdf_doc = SimpleDocTemplate(output_path, pagesize=A4)
         styles = getSampleStyleSheet()
         story = []
@@ -215,32 +215,80 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
         story.append(title)
         story.append(Spacer(1, 12))
         
-        # Process paragraphs
+        # Process paragraphs with error handling
+        paragraph_count = 0
         for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                # Basic formatting detection
-                style = styles['Normal']
-                text = paragraph.text
-                
-                if paragraph.style.name.startswith('Heading'):
-                    style = styles['Heading1'] if '1' in paragraph.style.name else styles['Heading2']
-                
-                p = Paragraph(text, style)
-                story.append(p)
-                story.append(Spacer(1, 6))
-        
-        # Process tables (basic)
-        for table in doc.tables:
-            story.append(Paragraph("Table Data:", styles['Heading3']))
-            for row in table.rows:
-                row_text = " | ".join([cell.text for cell in row.cells])
-                if row_text.strip():
-                    p = Paragraph(row_text, styles['Normal'])
+            try:
+                if paragraph.text.strip():
+                    paragraph_count += 1
+                    # Basic formatting detection
+                    style = styles['Normal']
+                    text = paragraph.text.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+                    
+                    if paragraph.style.name.startswith('Heading'):
+                        style = styles['Heading1'] if '1' in paragraph.style.name else styles['Heading2']
+                    
+                    p = Paragraph(text, style)
                     story.append(p)
-            story.append(Spacer(1, 12))
+                    story.append(Spacer(1, 6))
+            except Exception as para_error:
+                print(f"Warning: Skipped paragraph {paragraph_count}: {para_error}")
+                continue
         
+        # Process tables with error handling
+        table_count = 0
+        for table in doc.tables:
+            try:
+                table_count += 1
+                story.append(Paragraph(f"Table {table_count}:", styles['Heading3']))
+                
+                for row_idx, row in enumerate(table.rows):
+                    try:
+                        row_data = []
+                        for cell in row.cells:
+                            # Extract text only, ignore any formatting
+                            cell_text = ""
+                            for para in cell.paragraphs:
+                                if para.text.strip():
+                                    cell_text += para.text.strip() + " "
+                            row_data.append(cell_text.strip() or "-")
+                        
+                        row_text = " | ".join(row_data)
+                        if row_text.strip():
+                            # Escape special characters
+                            row_text = row_text.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+                            p = Paragraph(row_text, styles['Normal'])
+                            story.append(p)
+                    except Exception as row_error:
+                        print(f"Warning: Skipped table row {row_idx}: {row_error}")
+                        continue
+                        
+                story.append(Spacer(1, 12))
+            except Exception as table_error:
+                print(f"Warning: Skipped table {table_count}: {table_error}")
+                continue
+        
+        # Add note about images if document might contain them
+        try:
+            # Check if document has any embedded parts that might be images
+            if hasattr(doc, 'part') and hasattr(doc.part, 'rels'):
+                image_found = False
+                for rel_id, rel in doc.part.rels.items():
+                    if "image" in rel.target_ref.lower():
+                        image_found = True
+                        break
+                
+                if image_found:
+                    story.append(Spacer(1, 12))
+                    note = Paragraph("<b>Note:</b> This document contains images that could not be converted in basic mode. For image preservation, please ensure LibreOffice is available.", styles['Normal'])
+                    story.append(note)
+        except Exception:
+            # Ignore any errors in image detection
+            pass
+        
+        # Build the PDF with error handling
         pdf_doc.build(story)
-        print("✅ Basic Word to PDF conversion completed")
+        print("✅ Basic Word to PDF conversion completed (text only)")
         return output_path
         
     except ImportError as e:
