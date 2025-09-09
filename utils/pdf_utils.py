@@ -53,31 +53,40 @@ def split_pdf(pdf_file, page_range, output_path="split.pdf"):
     Returns:
         str: Path to the split PDF file
     """
-    reader = PdfReader(pdf_file)
-    writer = PdfWriter()
+    if not os.path.exists(pdf_file):
+        raise FileNotFoundError(f"PDF file not found: {pdf_file}")
     
-    # Parse page range
-    if '-' in page_range:
-        start_page, end_page = map(int, page_range.split('-'))
-        start_page -= 1  # Convert to 0-based indexing
-        end_page -= 1
-    else:
-        start_page = int(page_range) - 1  # Convert to 0-based indexing
-        end_page = start_page
-    
-    # Add pages to writer
-    for page_num in range(start_page, end_page + 1):
-        if page_num < len(reader.pages):
+    try:
+        reader = PdfReader(pdf_file)
+        total_pages = len(reader.pages)
+        
+        # Parse page range
+        if '-' in page_range:
+            start_page, end_page = page_range.split('-')
+            start_page = int(start_page) - 1  # Convert to 0-based index
+            end_page = int(end_page) - 1      # Convert to 0-based index
+        else:
+            start_page = end_page = int(page_range) - 1  # Single page
+        
+        # Validate page range
+        if start_page < 0 or end_page >= total_pages or start_page > end_page:
+            raise ValueError(f"Invalid page range. PDF has {total_pages} pages.")
+        
+        writer = PdfWriter()
+        for page_num in range(start_page, end_page + 1):
             writer.add_page(reader.pages[page_num])
-    
-    with open(output_path, 'wb') as output_file:
-        writer.write(output_file)
-    
-    return output_path
+        
+        with open(output_path, 'wb') as output_file:
+            writer.write(output_file)
+        
+        return output_path
+        
+    except Exception as e:
+        raise Exception(f"Error splitting PDF: {e}")
 
-def pdf_to_images(pdf_file, output_dir="images", format="PNG"):
+def pdf_to_images(pdf_path, output_dir=None):
     """
-    Convert PDF pages to images (disabled for memory optimization).
+    Convert PDF pages to images with memory optimization for free tier.
     
     Args:
         pdf_file: Path to the input PDF file
@@ -85,10 +94,41 @@ def pdf_to_images(pdf_file, output_dir="images", format="PNG"):
         format: Image format (PNG or JPEG)
     
     Returns:
-        list: Empty list (feature disabled for memory constraints)
+        list: List of image file paths
     """
-    raise Exception("PDF to images conversion disabled to save memory on free tier. "
-                   "Please use PDF merge/split features instead.")
+    try:
+        # Memory optimized PDF to images conversion
+        from pdf2image import convert_from_path
+        
+        if output_dir is None:
+            output_dir = tempfile.mkdtemp()
+        
+        # Convert with memory optimization settings
+        images = convert_from_path(
+            pdf_path,
+            dpi=150,  # Lower DPI to save memory
+            output_folder=output_dir,
+            fmt='JPEG',  # JPEG uses less memory than PNG
+            jpegopt={'quality': 85, 'progressive': True, 'optimize': True},
+            thread_count=1,  # Single thread to limit memory
+            poppler_path=None
+        )
+        
+        # Save images with optimized settings
+        image_paths = []
+        for i, image in enumerate(images):
+            image_path = os.path.join(output_dir, f"page_{i+1}.jpg")
+            # Optimize image size for memory
+            image.save(image_path, "JPEG", quality=85, optimize=True)
+            image_paths.append(image_path)
+        
+        return image_paths
+        
+    except ImportError:
+        raise RuntimeError("PDF to images conversion requires pdf2image package. "
+                         "Install with: pip install pdf2image")
+    except Exception as e:
+        raise RuntimeError(f"Error converting PDF to images: {e}")
 
 def create_zip_from_images(image_paths, zip_path="images.zip"):
     """
@@ -107,75 +147,86 @@ def create_zip_from_images(image_paths, zip_path="images.zip"):
     
     return zip_path
 
-def word_to_pdf(word_file, output_path="converted.pdf"):
-    """
-    Lightweight Word document to PDF conversion for memory-constrained environments.
-    Uses only python-docx + basic text extraction to minimize memory usage.
-    
-    Args:
-        word_file: Path to the input Word file (.docx, .doc)
-        output_path: Output file path for PDF
-    
-    Returns:
-        str: Path to the converted PDF file
-    """
+def image_to_pdf(image_path, output_path):
+    """Convert a single image to PDF"""
     try:
-        from docx import Document
+        from PIL import Image
         
-        print("⚡ Using lightweight Word to PDF conversion")
+        # Open image and convert to RGB if necessary
+        image = Image.open(image_path)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
         
-        # Read the Word document
-        doc = Document(word_file)
+        # Save as PDF
+        image.save(output_path, "PDF")
         
-        # Create simple text file first (memory efficient)
-        text_content = []
-        text_content.append("Converted Word Document")
-        text_content.append("=" * 40)
-        text_content.append("")
+    except ImportError:
+        # Fallback using reportlab
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.utils import ImageReader
         
-        # Extract text only (no heavy formatting)
-        for paragraph in doc.paragraphs:
-            if paragraph.text.strip():
-                text_content.append(paragraph.text.strip())
+        # Get image dimensions
+        img = ImageReader(image_path)
+        img_width, img_height = img.getSize()
         
-        # Extract table data (simple)
-        for table in doc.tables:
-            text_content.append("\nTable Data:")
-            for row in table.rows:
-                row_text = " | ".join([cell.text.strip() for cell in row.cells])
-                if row_text.strip():
-                    text_content.append(row_text)
+        # Create PDF with image
+        c = canvas.Canvas(output_path, pagesize=letter)
+        page_width, page_height = letter
         
-        # Create simple PDF with minimal dependencies
-        try:
-            # Try reportlab if available (lightweight usage)
-            from reportlab.pagesizes import A4
-            from reportlab.platypus import SimpleDocTemplate, Paragraph
-            from reportlab.lib.styles import getSampleStyleSheet
+        # Scale image to fit page
+        scale = min(page_width / img_width, page_height / img_height)
+        scaled_width = img_width * scale
+        scaled_height = img_height * scale
+        
+        # Center image on page
+        x = (page_width - scaled_width) / 2
+        y = (page_height - scaled_height) / 2
+        
+        c.drawImage(image_path, x, y, width=scaled_width, height=scaled_height)
+        c.save()
+
+def images_to_pdf(image_paths, output_path):
+    """Convert multiple images to a single PDF"""
+    try:
+        from PIL import Image
+        
+        # Convert first image and prepare for PDF
+        images = []
+        for image_path in image_paths:
+            image = Image.open(image_path)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            images.append(image)
+        
+        # Save all images as PDF pages
+        if images:
+            images[0].save(output_path, "PDF", save_all=True, append_images=images[1:])
             
-            pdf_doc = SimpleDocTemplate(output_path, pagesize=A4)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            for line in text_content:
-                if line.startswith("="):
-                    continue  # Skip separator lines
-                p = Paragraph(line.replace('<', '&lt;').replace('>', '&gt;'), styles['Normal'])
-                story.append(p)
-            
-            pdf_doc.build(story)
-            print("✅ Word to PDF conversion completed (lightweight mode)")
-            return output_path
-            
-        except ImportError:
-            # Fallback: create text file if no PDF library
-            txt_output = output_path.replace('.pdf', '.txt')
-            with open(txt_output, 'w', encoding='utf-8') as f:
-                f.write('\n'.join(text_content))
-            print("✅ Word to text conversion completed (fallback mode)")
-            return txt_output
+    except ImportError:
+        # Fallback using reportlab
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.utils import ImageReader
         
-    except ImportError as e:
-        raise Exception(f"Word conversion requires python-docx package: {e}")
-    except Exception as e:
-        raise Exception(f"Error converting Word document: {e}")
+        c = canvas.Canvas(output_path, pagesize=letter)
+        page_width, page_height = letter
+        
+        for image_path in image_paths:
+            # Get image dimensions
+            img = ImageReader(image_path)
+            img_width, img_height = img.getSize()
+            
+            # Scale image to fit page
+            scale = min(page_width / img_width, page_height / img_height)
+            scaled_width = img_width * scale
+            scaled_height = img_height * scale
+            
+            # Center image on page
+            x = (page_width - scaled_width) / 2
+            y = (page_height - scaled_height) / 2
+            
+            c.drawImage(image_path, x, y, width=scaled_width, height=scaled_height)
+            c.showPage()  # Start new page for next image
+        
+        c.save()

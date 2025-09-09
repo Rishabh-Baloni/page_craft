@@ -72,12 +72,12 @@ def lazy_import_pdf_utils():
         if current_dir not in sys.path:
             sys.path.insert(0, current_dir)
             
-        from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
+        from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, image_to_pdf
         # Test that functions are actually callable
-        if not all(callable(func) for func in [merge_pdfs, split_pdf, word_to_pdf]):
+        if not all(callable(func) for func in [merge_pdfs, split_pdf, image_to_pdf]):
             logging.error("PDF utility functions are not callable")
             return None, None, None, None, None
-        return merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
+        return merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, image_to_pdf
     except ImportError as e:
         logging.error(f"Failed to import PDF utilities: {e}")
         print(f"PDF utils import error: {e}")  # Also print for debugging
@@ -148,7 +148,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_message = """
 📄 Page Craft Bot Commands:
 
-📤 **Upload PDFs** then use:
+📤 **Upload Files** then use:
 
 🔗 **Merge PDFs:**
 • /merge - Merge all uploaded files
@@ -162,6 +162,10 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • /to_images - Convert latest PDF
 • /to_images 1 - Convert file #1
 
+📄 **Image Processing:**
+• Upload images → Converts to PDF automatically
+• Multiple images → Combined into single PDF
+
 💡 **NEW: Reply Feature!**
 Reply to any PDF message with commands:
 • Reply + /merge → Shows list to merge with
@@ -174,6 +178,10 @@ After processing, you'll be asked to name your file!
 📋 **File Management:**
 • /list - Show all uploaded files
 • /clear - Clear all uploaded files
+
+📁 **Supported Formats:**
+• PDF files (merge, split, convert)
+• Image files (JPG, PNG, GIF, BMP → PDF)
 
 📁 Files are numbered in upload order.
     """
@@ -412,19 +420,17 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Error processing PDF: {str(e)}")
 
-async def handle_word_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle Word document uploads and convert to PDF"""
+async def handle_image_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle image uploads and convert to PDF"""
     user_id = update.effective_user.id
     
     # Check file type
     mime_type = update.message.document.mime_type
     file_name = update.message.document.file_name
     
-    # Check if it's a Word document
-    if not (mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                         'application/msword'] or 
-            file_name.lower().endswith(('.docx', '.doc'))):
-        await update.message.reply_text("❌ Please send Word documents (.docx or .doc files) only.")
+    # Check if it's an image
+    if not (mime_type and mime_type.startswith('image/')):
+        await update.message.reply_text("❌ Please send image files only.")
         return
     
     # Performance optimization: limit files per user
@@ -433,43 +439,36 @@ async def handle_word_document(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     
     # Show processing status
-    status_message = await update.message.reply_text("🔄 Converting Word document to PDF...")
+    status_message = await update.message.reply_text("🔄 Converting image to PDF...")
     
     try:
         # Download file
         file = await update.message.document.get_file()
         temp_dir = tempfile.mkdtemp()
-        word_file_path = os.path.join(temp_dir, file_name)
-        await file.download_to_drive(word_file_path)
+        image_file_path = os.path.join(temp_dir, file_name)
+        await file.download_to_drive(image_file_path)
         
         # Convert to PDF using lazy import
         pdf_filename = file_name.rsplit('.', 1)[0] + '.pdf'
         pdf_file_path = os.path.join(temp_dir, pdf_filename)
         
-        _, _, _, _, word_to_pdf = lazy_import_pdf_utils()
-        if word_to_pdf is None:
+        _, _, _, _, image_to_pdf = lazy_import_pdf_utils()
+        if image_to_pdf is None:
             await status_message.edit_text("❌ PDF utilities not available.")
             return
         
-        word_to_pdf(word_file_path, pdf_file_path)
+        image_to_pdf(image_file_path, pdf_file_path)
         
         # Update status
         await status_message.edit_text("✅ Conversion completed!")
         
         # Ask for filename
-        operation_info = f"Converted Word document '{file_name}' to PDF!"
+        operation_info = f"Converted image '{file_name}' to PDF!"
         return await ask_for_filename(update, context, pdf_file_path, "pdf", operation_info)
         
     except Exception as e:
         error_msg = str(e)
-        if "additional packages" in error_msg.lower():
-            await status_message.edit_text(
-                "❌ Word to PDF conversion requires additional packages.\n"
-                "📋 This feature works when the bot is deployed on cloud platforms.\n"
-                "💡 **Tip**: You can use online converters for now, or upload PDFs directly!"
-            )
-        else:
-            await status_message.edit_text(f"❌ Error converting Word document: {error_msg}")
+        await status_message.edit_text(f"❌ Error converting image: {error_msg}")
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle any document upload and route to appropriate handler"""
@@ -483,11 +482,9 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
     if mime_type == 'application/pdf':
         return await handle_document(update, context)
     
-    # Check if it's a Word document
-    elif (mime_type in ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                       'application/msword'] or 
-          file_name.endswith(('.docx', '.doc'))):
-        return await handle_word_document(update, context)
+    # Check if it's an image
+    elif mime_type and mime_type.startswith('image/'):
+        return await handle_image_document(update, context)
     
     # Unsupported file type
     else:
@@ -495,7 +492,7 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             "❌ Unsupported file type!\n\n"
             "📄 **Supported formats:**\n"
             "• PDF files (.pdf)\n"
-            "• Word documents (.docx, .doc)\n\n"
+            "• Image files (.jpg, .png, .jpeg, .gif, .bmp)\n\n"
             "💡 Upload one of these file types to get started!"
         )
     
@@ -1016,7 +1013,7 @@ def start_bot():
     print(f"Current working directory: {os.getcwd()}")
     
     # Test PDF utilities import
-    merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf = lazy_import_pdf_utils()
+    merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, image_to_pdf = lazy_import_pdf_utils()
     if merge_pdfs is not None:
         print("✅ PDF utilities loaded successfully")
     else:
