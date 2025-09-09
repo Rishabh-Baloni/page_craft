@@ -51,7 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command handler"""
     help_message = """
-📄 Document Bot MVP Commands:
+📄 Paper Craft Bot Commands:
 
 📤 **Upload PDFs** then use:
 
@@ -925,5 +925,5 @@ def start_bot():
     
     app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, handle_unknown_command))
     
-    print("🚀 Document Bot MVP is starting...")
+    print("🚀 Paper Craft Bot is starting...")
     app.run_polling()
