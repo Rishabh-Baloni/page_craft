@@ -906,7 +906,8 @@ def start_bot():
     except Exception as webhook_error:
         print(f"⚠️ Could not clear webhook: {webhook_error}")
     
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Configure HTTP timeouts in the application builder
+    app = ApplicationBuilder().token(BOT_TOKEN).read_timeout(30).write_timeout(30).connect_timeout(30).build()
     
     # Create conversation handler for filename input from commands
     command_filename_handler = ConversationHandler(
@@ -1008,10 +1009,7 @@ def start_bot():
             allowed_updates=Update.ALL_TYPES,
             poll_interval=2.0,  # Increase poll interval to reduce conflicts
             timeout=20,  # Increase timeout
-            bootstrap_retries=3,  # Retry connection failures
-            read_timeout=30,
-            write_timeout=30,
-            connect_timeout=30
+            bootstrap_retries=3  # Retry connection failures
         )
     except Exception as e:
         print(f"❌ Bot startup failed: {e}")
@@ -1026,10 +1024,7 @@ def start_bot():
                     allowed_updates=Update.ALL_TYPES,
                     poll_interval=5.0,
                     timeout=30,
-                    bootstrap_retries=5,
-                    read_timeout=60,
-                    write_timeout=60,
-                    connect_timeout=60
+                    bootstrap_retries=5
                 )
             except Exception as retry_error:
                 print(f"❌ Bot failed to start after retry: {retry_error}")
