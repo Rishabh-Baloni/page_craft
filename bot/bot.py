@@ -1,49 +1,75 @@
-﻿# Page Craft Bot - Optimized for Performance
+﻿# Page Craft Bot - Memory Optimized for Render Free Tier
 import os
 import tempfile
 import logging
 import shutil
-import asyncio
-import httpx
-import time
+import gc
+import psutil
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
-from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
 
-# Configure minimal logging to reduce overhead
-logging.basicConfig(level=logging.WARNING)
+# Configure minimal logging to reduce memory overhead
+logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
+
+# Memory optimization: Import utils only when needed (lazy loading)
+# from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
 
 # Conversation states
 WAITING_FOR_FILENAME = 1
 
-# Store user files temporarily (with size limits to prevent memory issues)
+# Store user files temporarily (with strict memory limits)
 user_files = {}
 pending_files = {}
 
-# Performance optimization: limit file storage per user
-MAX_FILES_PER_USER = 20
+# Memory optimization: Reduce limits for free tier
+MAX_FILES_PER_USER = 5  # Reduced from 20
+MAX_FILE_SIZE_MB = 10   # Limit individual file size
+MAX_TOTAL_MEMORY_MB = 200  # Total memory limit
 
-# Render self-wake mechanism
+# Render self-wake mechanism (only if URL provided)
 RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', None)
 
-async def keep_service_alive():
-    """Ping the Render service to keep it awake"""
-    if not RENDER_URL:
-        return
-    
+def get_memory_usage():
+    """Get current memory usage in MB"""
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(f"{RENDER_URL}/health")
-            if response.status_code == 200:
-                print(f"🔄 Service keepalive: {RENDER_URL}")
-    except Exception as e:
-        print(f"⚠️ Keepalive failed: {e}")
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024 / 1024
+    except:
+        return 0
+
+def cleanup_memory():
+    """Force garbage collection and memory cleanup"""
+    gc.collect()
+    
+def check_memory_limit():
+    """Check if we're approaching memory limits"""
+    memory_mb = get_memory_usage()
+    if memory_mb > MAX_TOTAL_MEMORY_MB:
+        logging.warning(f"High memory usage: {memory_mb:.1f}MB")
+        cleanup_memory()
+        return False
+    return True
+
+def lazy_import_pdf_utils():
+    """Lazy import PDF utilities to save memory"""
+    try:
+        from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
+        return merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
+    except ImportError as e:
+        logging.error(f"Failed to import PDF utilities: {e}")
+        return None, None, None, None, None
 
 async def wake_service_on_activity():
-    """Wake the service when bot receives activity"""
-    if RENDER_URL:
-        # Run keepalive in background without blocking
-        asyncio.create_task(keep_service_alive())
+    """Lightweight service wake - only if memory allows"""
+    if not RENDER_URL or not check_memory_limit():
+        return
+        
+    try:
+        # Simple HTTP request without heavy async client
+        import urllib.request
+        urllib.request.urlopen(f"{RENDER_URL}/health", timeout=5)
+    except Exception:
+        pass  # Silent fail to save memory
 
 def find_replied_pdf(update: Update, user_id: int):
     """Find the PDF file that was replied to"""
@@ -64,12 +90,17 @@ def find_replied_pdf(update: Update, user_id: int):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
-    # Wake service on user activity
+    # Memory check before processing
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service temporarily busy. Please try again in a moment.")
+        return
+        
+    # Lightweight service wake
     await wake_service_on_activity()
     
     await update.message.reply_text(
-        "📄 Page Craft Bot\n\n"
-        "Upload files and use:\n"
+        "📄 Page Craft Bot - Memory Optimized\n\n"
+        "Upload files (max 10MB each, 5 files per user):\n"
         "• 📄 PDFs: /merge, /split, /to_images\n"
         "• 📝 Word docs: Converts to PDF automatically\n"
         "• /help - Full help\n\n"
@@ -78,7 +109,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command handler"""
-    # Wake service on user activity
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service temporarily busy. Please try again.")
+        return
+        
     await wake_service_on_activity()
     
     help_message = """
@@ -291,27 +325,50 @@ async def clear_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text("🗑️ All uploaded files cleared!")
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle PDF document uploads"""
+    """Handle PDF document uploads with memory optimization"""
     user_id = update.effective_user.id
+    
+    # Memory check first
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service busy. Please try again in a moment.")
+        return
     
     if not update.message.document.mime_type == 'application/pdf':
         await update.message.reply_text("❌ Please send PDF files only.")
         return
     
-    # Performance optimization: limit files per user
+    # Check file size before download
+    file_size_mb = update.message.document.file_size / 1024 / 1024
+    if file_size_mb > MAX_FILE_SIZE_MB:
+        await update.message.reply_text(f"❌ File too large ({file_size_mb:.1f}MB). Max size: {MAX_FILE_SIZE_MB}MB")
+        return
+    
+    # Check user file limits
     if user_id in user_files and len(user_files[user_id]) >= MAX_FILES_PER_USER:
         await update.message.reply_text(f"⚠️ File limit reached ({MAX_FILES_PER_USER}). Use /clear to remove old files.")
         return
     
-    # Download file
-    file = await update.message.document.get_file()
-    temp_dir = tempfile.mkdtemp()
-    file_path = os.path.join(temp_dir, update.message.document.file_name)
-    await file.download_to_drive(file_path)
-    
-    # Store file info
-    if user_id not in user_files:
-        user_files[user_id] = []
+    try:
+        # Download file with memory monitoring
+        file = await update.message.document.get_file()
+        temp_dir = tempfile.mkdtemp()
+        file_path = os.path.join(temp_dir, update.message.document.file_name)
+        await file.download_to_drive(file_path)
+        
+        # Check memory after download
+        if not check_memory_limit():
+            # Cleanup and abort
+            try:
+                os.remove(file_path)
+                os.rmdir(temp_dir)
+            except:
+                pass
+            await update.message.reply_text("⚠️ Memory limit reached. File removed.")
+            return
+        
+        # Store file info
+        if user_id not in user_files:
+            user_files[user_id] = []
     
     file_number = len(user_files[user_id]) + 1
     user_files[user_id].append({
@@ -523,8 +580,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Error processing PDF: {str(e)}")
 
 async def merge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Merge PDF command handler"""
+    """Memory-optimized merge PDF command handler"""
     user_id = update.effective_user.id
+    
+    # Memory check before processing
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service busy. Please try again in a moment.")
+        return
     
     if user_id not in user_files or len(user_files[user_id]) == 0:
         await update.message.reply_text("Please upload PDF files before merging.")
@@ -798,12 +860,16 @@ async def split_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Error splitting PDF: {error_msg}")
 
 async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Convert PDF to images command handler"""
-    user_id = update.effective_user.id
-    
-    if user_id not in user_files or len(user_files[user_id]) == 0:
-        await update.message.reply_text("Please upload a PDF file before converting to images.")
-        return
+    """Convert PDF to images command handler (disabled for memory optimization)"""
+    await update.message.reply_text(
+        "🚫 **PDF to Images Conversion Disabled**\n\n"
+        "This feature has been disabled to optimize memory usage on the free tier.\n\n"
+        "✅ **Available features:**\n"
+        "• PDF merge and split operations\n"
+        "• Word to PDF conversion\n"
+        "• File management commands\n\n"
+        "💡 Use /merge or /split for PDF operations!"
+    )
     
     # Check if this is a reply to a PDF
     replied_pdf = find_replied_pdf(update, user_id)

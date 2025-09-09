@@ -77,7 +77,7 @@ def split_pdf(pdf_file, page_range, output_path="split.pdf"):
 
 def pdf_to_images(pdf_file, output_dir="images", format="PNG"):
     """
-    Convert PDF pages to images.
+    Convert PDF pages to images (disabled for memory optimization).
     
     Args:
         pdf_file: Path to the input PDF file
@@ -85,30 +85,10 @@ def pdf_to_images(pdf_file, output_dir="images", format="PNG"):
         format: Image format (PNG or JPEG)
     
     Returns:
-        list: List of image file paths
+        list: Empty list (feature disabled for memory constraints)
     """
-    try:
-        # Create output directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Convert PDF to images
-        images = convert_from_path(pdf_file)
-        image_paths = []
-        
-        for i, image in enumerate(images):
-            image_path = os.path.join(output_dir, f"page_{i+1}.{format.lower()}")
-            image.save(image_path, format)
-            image_paths.append(image_path)
-        
-        return image_paths
-    
-    except Exception as e:
-        # Handle poppler not installed error
-        if "poppler" in str(e).lower():
-            raise Exception("Poppler is required for PDF to image conversion. "
-                          "Please install poppler-utils (Linux) or poppler (Windows/Mac)")
-        else:
-            raise e
+    raise Exception("PDF to images conversion disabled to save memory on free tier. "
+                   "Please use PDF merge/split features instead.")
 
 def create_zip_from_images(image_paths, zip_path="images.zip"):
     """
@@ -129,8 +109,8 @@ def create_zip_from_images(image_paths, zip_path="images.zip"):
 
 def word_to_pdf(word_file, output_path="converted.pdf"):
     """
-    Convert Word document to PDF using LibreOffice CLI (best quality preservation).
-    Falls back to pypandoc, then basic python-docx if LibreOffice is unavailable.
+    Lightweight Word document to PDF conversion for memory-constrained environments.
+    Uses only python-docx + basic text extraction to minimize memory usage.
     
     Args:
         word_file: Path to the input Word file (.docx, .doc)
@@ -139,171 +119,63 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
     Returns:
         str: Path to the converted PDF file
     """
-    import subprocess
-    import shutil
-    
-    # Method 1: LibreOffice CLI (Best option - preserves all formatting, images, tables)
-    try:
-        # Check if LibreOffice is available
-        libreoffice_cmd = None
-        for cmd in ['libreoffice', 'libreoffice7.0', 'libreoffice6.4', 'soffice']:
-            if shutil.which(cmd):
-                libreoffice_cmd = cmd
-                break
-        
-        if libreoffice_cmd:
-            # Get output directory and filename
-            output_dir = os.path.dirname(os.path.abspath(output_path))
-            output_name = os.path.splitext(os.path.basename(output_path))[0]
-            
-            # LibreOffice command for headless conversion
-            cmd = [
-                libreoffice_cmd,
-                '--headless',
-                '--convert-to', 'pdf',
-                '--outdir', output_dir,
-                word_file
-            ]
-            
-            # Run LibreOffice conversion
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            
-            # LibreOffice creates PDF with same name as input file
-            input_name = os.path.splitext(os.path.basename(word_file))[0]
-            generated_pdf = os.path.join(output_dir, f"{input_name}.pdf")
-            
-            if result.returncode == 0 and os.path.exists(generated_pdf):
-                # Rename to desired output name if different
-                if generated_pdf != output_path:
-                    shutil.move(generated_pdf, output_path)
-                print("✅ Word to PDF conversion completed using LibreOffice")
-                return output_path
-            else:
-                print(f"LibreOffice conversion failed: {result.stderr}")
-                
-    except Exception as e:
-        print(f"LibreOffice conversion failed: {e}")
-    
-    # Method 2: pypandoc (Good fallback with LaTeX)
-    try:
-        import pypandoc
-        
-        # Convert using pandoc
-        pypandoc.convert_file(
-            word_file, 
-            'pdf', 
-            outputfile=output_path,
-            extra_args=['--pdf-engine=pdflatex']
-        )
-        
-        if os.path.exists(output_path):
-            print("✅ Word to PDF conversion completed using pypandoc")
-            return output_path
-            
-    except ImportError:
-        print("pypandoc not available, trying basic conversion...")
-    except Exception as e:
-        print(f"pypandoc conversion failed: {e}")
-    
-    # Method 3: Basic python-docx + reportlab fallback (text only)
     try:
         from docx import Document
-        from reportlab.lib.pagesizes import A4
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
         
-        print("⚠️ Using basic text conversion (formatting and images will be lost)")
+        print("⚡ Using lightweight Word to PDF conversion")
         
         # Read the Word document
         doc = Document(word_file)
         
-        # Create PDF with better error handling
-        pdf_doc = SimpleDocTemplate(output_path, pagesize=A4)
-        styles = getSampleStyleSheet()
-        story = []
+        # Create simple text file first (memory efficient)
+        text_content = []
+        text_content.append("Converted Word Document")
+        text_content.append("=" * 40)
+        text_content.append("")
         
-        # Add document title
-        title = Paragraph("Converted Document", styles['Title'])
-        story.append(title)
-        story.append(Spacer(1, 12))
-        
-        # Process paragraphs with error handling
-        paragraph_count = 0
+        # Extract text only (no heavy formatting)
         for paragraph in doc.paragraphs:
-            try:
-                if paragraph.text.strip():
-                    paragraph_count += 1
-                    # Basic formatting detection
-                    style = styles['Normal']
-                    text = paragraph.text.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
-                    
-                    if paragraph.style.name.startswith('Heading'):
-                        style = styles['Heading1'] if '1' in paragraph.style.name else styles['Heading2']
-                    
-                    p = Paragraph(text, style)
-                    story.append(p)
-                    story.append(Spacer(1, 6))
-            except Exception as para_error:
-                print(f"Warning: Skipped paragraph {paragraph_count}: {para_error}")
-                continue
+            if paragraph.text.strip():
+                text_content.append(paragraph.text.strip())
         
-        # Process tables with error handling
-        table_count = 0
+        # Extract table data (simple)
         for table in doc.tables:
-            try:
-                table_count += 1
-                story.append(Paragraph(f"Table {table_count}:", styles['Heading3']))
-                
-                for row_idx, row in enumerate(table.rows):
-                    try:
-                        row_data = []
-                        for cell in row.cells:
-                            # Extract text only, ignore any formatting
-                            cell_text = ""
-                            for para in cell.paragraphs:
-                                if para.text.strip():
-                                    cell_text += para.text.strip() + " "
-                            row_data.append(cell_text.strip() or "-")
-                        
-                        row_text = " | ".join(row_data)
-                        if row_text.strip():
-                            # Escape special characters
-                            row_text = row_text.replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
-                            p = Paragraph(row_text, styles['Normal'])
-                            story.append(p)
-                    except Exception as row_error:
-                        print(f"Warning: Skipped table row {row_idx}: {row_error}")
-                        continue
-                        
-                story.append(Spacer(1, 12))
-            except Exception as table_error:
-                print(f"Warning: Skipped table {table_count}: {table_error}")
-                continue
+            text_content.append("\nTable Data:")
+            for row in table.rows:
+                row_text = " | ".join([cell.text.strip() for cell in row.cells])
+                if row_text.strip():
+                    text_content.append(row_text)
         
-        # Add note about images if document might contain them
+        # Create simple PDF with minimal dependencies
         try:
-            # Check if document has any embedded parts that might be images
-            if hasattr(doc, 'part') and hasattr(doc.part, 'rels'):
-                image_found = False
-                for rel_id, rel in doc.part.rels.items():
-                    if "image" in rel.target_ref.lower():
-                        image_found = True
-                        break
-                
-                if image_found:
-                    story.append(Spacer(1, 12))
-                    note = Paragraph("<b>Note:</b> This document contains images that could not be converted in basic mode. For image preservation, please ensure LibreOffice is available.", styles['Normal'])
-                    story.append(note)
-        except Exception:
-            # Ignore any errors in image detection
-            pass
-        
-        # Build the PDF with error handling
-        pdf_doc.build(story)
-        print("✅ Basic Word to PDF conversion completed (text only)")
-        return output_path
+            # Try reportlab if available (lightweight usage)
+            from reportlab.pagesizes import A4
+            from reportlab.platypus import SimpleDocTemplate, Paragraph
+            from reportlab.lib.styles import getSampleStyleSheet
+            
+            pdf_doc = SimpleDocTemplate(output_path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            for line in text_content:
+                if line.startswith("="):
+                    continue  # Skip separator lines
+                p = Paragraph(line.replace('<', '&lt;').replace('>', '&gt;'), styles['Normal'])
+                story.append(p)
+            
+            pdf_doc.build(story)
+            print("✅ Word to PDF conversion completed (lightweight mode)")
+            return output_path
+            
+        except ImportError:
+            # Fallback: create text file if no PDF library
+            txt_output = output_path.replace('.pdf', '.txt')
+            with open(txt_output, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(text_content))
+            print("✅ Word to text conversion completed (fallback mode)")
+            return txt_output
         
     except ImportError as e:
-        raise Exception(f"Word to PDF conversion requires additional packages: {e}")
+        raise Exception(f"Word conversion requires python-docx package: {e}")
     except Exception as e:
         raise Exception(f"Error converting Word document: {e}")
