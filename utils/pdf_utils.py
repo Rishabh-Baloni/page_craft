@@ -117,7 +117,7 @@ def create_zip_from_images(image_paths, zip_path="images.zip"):
 
 def word_to_pdf(word_file, output_path="converted.pdf"):
     """
-    Convert Word document to PDF using Linux-compatible pure Python libraries.
+    Convert Word document to PDF preserving formatting using Linux-compatible libraries.
     
     Args:
         word_file: Path to the input Word file (.docx, .doc)
@@ -128,24 +128,143 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
     """
     try:
         from docx import Document
-        from reportlab.lib.pagesizes import letter
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
         
         # Read the Word document
         doc = Document(word_file)
         
-        # Create PDF
-        pdf_doc = SimpleDocTemplate(output_path, pagesize=letter)
+        # Create PDF with better margins
+        pdf_doc = SimpleDocTemplate(
+            output_path, 
+            pagesize=A4,
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch,
+            topMargin=1*inch,
+            bottomMargin=1*inch
+        )
+        
         styles = getSampleStyleSheet()
         story = []
         
+        # Create custom styles for different formatting
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=16,
+            spaceAfter=12,
+            textColor=colors.black,
+            alignment=TA_LEFT
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=10,
+            textColor=colors.black,
+            alignment=TA_LEFT
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=6,
+            textColor=colors.black,
+            alignment=TA_LEFT,
+            leftIndent=0,
+            rightIndent=0
+        )
+        
+        # Process paragraphs with formatting
         for paragraph in doc.paragraphs:
             if paragraph.text.strip():
-                p = Paragraph(paragraph.text, styles['Normal'])
-                story.append(p)
+                # Detect paragraph style
+                para_style = normal_style
+                
+                # Check for heading styles
+                if paragraph.style.name.startswith('Heading'):
+                    if '1' in paragraph.style.name:
+                        para_style = title_style
+                    else:
+                        para_style = heading_style
+                
+                # Process runs to preserve bold/italic
+                formatted_text = ""
+                for run in paragraph.runs:
+                    text = run.text
+                    if text:
+                        # Apply formatting tags
+                        if run.bold and run.italic:
+                            text = f"<b><i>{text}</i></b>"
+                        elif run.bold:
+                            text = f"<b>{text}</b>"
+                        elif run.italic:
+                            text = f"<i>{text}</i>"
+                        elif run.underline:
+                            text = f"<u>{text}</u>"
+                        
+                        formatted_text += text
+                
+                if formatted_text.strip():
+                    # Handle different alignments
+                    if paragraph.alignment == 1:  # Center
+                        para_style.alignment = TA_CENTER
+                    elif paragraph.alignment == 2:  # Right
+                        para_style.alignment = TA_RIGHT
+                    elif paragraph.alignment == 3:  # Justify
+                        para_style.alignment = TA_JUSTIFY
+                    else:
+                        para_style.alignment = TA_LEFT
+                    
+                    p = Paragraph(formatted_text, para_style)
+                    story.append(p)
+                    story.append(Spacer(1, 6))
+        
+        # Process tables
+        for table in doc.tables:
+            table_data = []
+            for row in table.rows:
+                row_data = []
+                for cell in row.cells:
+                    # Get cell text with basic formatting
+                    cell_text = ""
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            text = run.text
+                            if text:
+                                if run.bold:
+                                    text = f"<b>{text}</b>"
+                                elif run.italic:
+                                    text = f"<i>{text}</i>"
+                                cell_text += text
+                    row_data.append(cell_text or " ")
+                table_data.append(row_data)
+            
+            if table_data:
+                # Create table with styling
+                pdf_table = Table(table_data)
+                pdf_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 9),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                story.append(pdf_table)
                 story.append(Spacer(1, 12))
         
+        # Build the PDF
         pdf_doc.build(story)
         return output_path
         
