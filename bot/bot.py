@@ -369,15 +369,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Store file info
         if user_id not in user_files:
             user_files[user_id] = []
-    
-    file_number = len(user_files[user_id]) + 1
-    user_files[user_id].append({
-        'name': update.message.document.file_name,
-        'path': file_path,
-        'message_id': update.message.message_id
-    })
-    
-    await update.message.reply_text(f"📄 PDF uploaded as file #{file_number}: {update.message.document.file_name}")
+        
+        file_number = len(user_files[user_id]) + 1
+        user_files[user_id].append({
+            'name': update.message.document.file_name,
+            'path': file_path,
+            'message_id': update.message.message_id
+        })
+        
+        await update.message.reply_text(f"📄 PDF uploaded as file #{file_number}: {update.message.document.file_name}")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error processing PDF: {str(e)}")
 
 async def handle_word_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle Word document uploads and convert to PDF"""
