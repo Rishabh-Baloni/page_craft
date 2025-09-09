@@ -151,24 +151,26 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📤 **Upload Files** then use:
 
 🔗 **Merge PDFs:**
-• /merge - Merge all uploaded files
-• /merge 1,3,2 - Merge specific files in order
+• /merge - Merge all uploaded PDFs
+• /merge 1,3,2 - Merge specific PDFs in order
 
 ✂️ **Split PDF:**
-• /split 1 5-8 - Split file #1, pages 5 to 8  
-• /split 2 3 - Split file #2, page 3 only
+• /split 1 5-8 - Split PDF #1, pages 5 to 8  
+• /split 2 3 - Split PDF #2, page 3 only
 
-🖼️ **Convert to Images:**
-• /to_images - Convert latest PDF
-• /to_images 1 - Convert file #1
+🖼️ **PDF to Images:**
+• /to_images - Convert latest PDF to images
+• /to_images 1 - Convert PDF #1 to images
 
-📄 **Image Processing:**
-• Upload images → Converts to PDF automatically
-• Multiple images → Combined into single PDF
+� **Image to PDF:**
+• Upload images → Stored for processing
+• /convert_image - Convert latest image to PDF
+• /convert_image 2 - Convert image #2 to PDF
+• /combine_images - Combine ALL images into 1 PDF
 
-💡 **NEW: Reply Feature!**
+💡 **Reply Feature:**
 Reply to any PDF message with commands:
-• Reply + /merge → Shows list to merge with
+• Reply + /merge → Shows merge options
 • Reply + /split pages → Splits that PDF
 • Reply + /to_images → Converts that PDF
 
@@ -180,8 +182,11 @@ After processing, you'll be asked to name your file!
 • /clear - Clear all uploaded files
 
 📁 **Supported Formats:**
-• PDF files (merge, split, convert)
-• Image files (JPG, PNG, GIF, BMP → PDF)
+• PDF files (merge, split, convert to images)
+• Image files (JPG, PNG, GIF, BMP → convert/combine to PDF)
+
+⚠️ **REMOVED Features:**
+• Word to PDF conversion (removed due to file path issues)
 
 📁 Files are numbered in upload order.
     """
@@ -338,12 +343,28 @@ async def list_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     
     if user_id not in user_files or len(user_files[user_id]) == 0:
-        await update.message.reply_text("No PDFs uploaded yet! Send me a PDF file to get started.")
+        await update.message.reply_text("📁 No files uploaded yet! Send me a PDF or image file to get started.")
         return
     
-    file_list = "📁 **Your uploaded PDFs:**\n\n"
-    for i, file_info in enumerate(user_files[user_id], 1):
-        file_list += f"{i}. {file_info['name']}\n"
+    # Separate files by type
+    pdf_files = [f for f in user_files[user_id] if f.get('type', 'pdf') == 'pdf']
+    image_files = [f for f in user_files[user_id] if f.get('type') == 'image']
+    
+    file_list = "📁 **Your uploaded files:**\n\n"
+    
+    if pdf_files:
+        file_list += "📄 **PDFs:**\n"
+        for i, file_info in enumerate(pdf_files, 1):
+            file_list += f"{i}. {file_info['name']}\n"
+        file_list += "\n"
+    
+    if image_files:
+        file_list += "🖼️ **Images:**\n"
+        for i, file_info in enumerate(image_files, 1):
+            file_list += f"{i}. {file_info['name']}\n"
+        file_list += "\n"
+    
+    file_list += f"📊 **Total:** {len(user_files[user_id])} files"
     
     await update.message.reply_text(file_list)
 
@@ -421,7 +442,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Error processing PDF: {str(e)}")
 
 async def handle_image_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle image uploads and convert to PDF"""
+    """Handle image uploads and store for PDF conversion"""
     user_id = update.effective_user.id
     
     # Check file type
@@ -439,7 +460,7 @@ async def handle_image_document(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     # Show processing status
-    status_message = await update.message.reply_text("🔄 Converting image to PDF...")
+    status_message = await update.message.reply_text("� Processing image...")
     
     try:
         # Download file
@@ -448,26 +469,29 @@ async def handle_image_document(update: Update, context: ContextTypes.DEFAULT_TY
         image_file_path = os.path.join(temp_dir, file_name)
         await file.download_to_drive(image_file_path)
         
-        # Convert to PDF using lazy import
-        pdf_filename = file_name.rsplit('.', 1)[0] + '.pdf'
-        pdf_file_path = os.path.join(temp_dir, pdf_filename)
+        # Store image in user files for combining
+        if user_id not in user_files:
+            user_files[user_id] = []
         
-        _, _, _, _, image_to_pdf = lazy_import_pdf_utils()
-        if image_to_pdf is None:
-            await status_message.edit_text("❌ PDF utilities not available.")
-            return
+        user_files[user_id].append({
+            'name': file_name,
+            'path': image_file_path,
+            'type': 'image',
+            'size': update.message.document.file_size
+        })
         
-        image_to_pdf(image_file_path, pdf_file_path)
-        
-        # Update status
-        await status_message.edit_text("✅ Conversion completed!")
-        
-        # Ask for filename
-        operation_info = f"Converted image '{file_name}' to PDF!"
-        return await ask_for_filename(update, context, pdf_file_path, "pdf", operation_info)
+        await status_message.edit_text(
+            f"✅ Image received: {file_name}\n\n"
+            f"📁 Your uploaded images: {len([f for f in user_files[user_id] if f['type'] == 'image'])}\n\n"
+            f"📋 Options:\n"
+            f"• Upload more images and use /combine_images\n"
+            f"• Use /convert_image to convert this image to PDF\n"
+            f"• Use /list to see all files"
+        )
         
     except Exception as e:
         error_msg = str(e)
+        await status_message.edit_text(f"❌ Error processing image: {error_msg}")
         await status_message.edit_text(f"❌ Error converting image: {error_msg}")
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -495,22 +519,6 @@ async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE
             "• Image files (.jpg, .png, .jpeg, .gif, .bmp)\n\n"
             "💡 Upload one of these file types to get started!"
         )
-    
-    await update.message.reply_text(f"📄 PDF uploaded as file #{file_number}: {update.message.document.file_name}")
-
-async def list_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """List all uploaded files"""
-    user_id = update.effective_user.id
-    
-    if user_id not in user_files or len(user_files[user_id]) == 0:
-        await update.message.reply_text("No PDFs uploaded yet! Send me a PDF file to get started.")
-        return
-    
-    file_list = "📁 **Your uploaded PDFs:**\n\n"
-    for i, file_info in enumerate(user_files[user_id], 1):
-        file_list += f"{i}. {file_info['name']}\n"
-    
-    await update.message.reply_text(file_list)
 
 async def merge_with_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show merge options when replying to a PDF"""
@@ -1007,6 +1015,102 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error_msg = str(e)
         await update.message.reply_text(f"❌ Error converting PDF to images: {error_msg}")
 
+async def convert_image_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Convert a single image to PDF"""
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service temporarily busy. Please try again.")
+        return
+        
+    await wake_service_on_activity()
+    
+    user_id = update.effective_user.id
+    
+    if user_id not in user_files or not user_files[user_id]:
+        await update.message.reply_text("❌ No files uploaded. Please upload an image first.")
+        return
+    
+    # Find image files
+    image_files = [f for f in user_files[user_id] if f.get('type') == 'image']
+    if not image_files:
+        await update.message.reply_text("❌ No image files found. Please upload an image first.")
+        return
+    
+    try:
+        # Use specified image or latest
+        if len(context.args) > 0:
+            file_number = int(context.args[0])
+            if file_number < 1 or file_number > len(image_files):
+                await update.message.reply_text(f"❌ Invalid image number. You have {len(image_files)} images.")
+                return
+            selected_file = image_files[file_number - 1]
+        else:
+            selected_file = image_files[-1]  # Latest image
+        
+        # Convert to PDF
+        temp_dir = tempfile.mkdtemp()
+        pdf_filename = selected_file['name'].rsplit('.', 1)[0] + '.pdf'
+        pdf_file_path = os.path.join(temp_dir, pdf_filename)
+        
+        _, _, _, _, image_to_pdf = lazy_import_pdf_utils()
+        if image_to_pdf is None:
+            await update.message.reply_text("❌ PDF utilities not available.")
+            return
+        
+        image_to_pdf(selected_file['path'], pdf_file_path)
+        
+        # Ask for filename
+        operation_info = f"Converted image '{selected_file['name']}' to PDF!"
+        return await ask_for_filename(update, context, pdf_file_path, "pdf", operation_info)
+        
+    except ValueError:
+        await update.message.reply_text("❌ Invalid image number.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error converting image: {e}")
+
+async def combine_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Combine multiple images into a single PDF"""
+    if not check_memory_limit():
+        await update.message.reply_text("⚠️ Service temporarily busy. Please try again.")
+        return
+        
+    await wake_service_on_activity()
+    
+    user_id = update.effective_user.id
+    
+    if user_id not in user_files or not user_files[user_id]:
+        await update.message.reply_text("❌ No files uploaded. Please upload images first.")
+        return
+    
+    # Find image files
+    image_files = [f for f in user_files[user_id] if f.get('type') == 'image']
+    if len(image_files) < 2:
+        await update.message.reply_text(f"❌ Need at least 2 images to combine. You have {len(image_files)} images.")
+        return
+    
+    try:
+        status_message = await update.message.reply_text("🔄 Combining images into PDF...")
+        
+        # Get image paths
+        image_paths = [f['path'] for f in image_files]
+        
+        # Create combined PDF
+        temp_dir = tempfile.mkdtemp()
+        pdf_filename = "combined_images.pdf"
+        pdf_file_path = os.path.join(temp_dir, pdf_filename)
+        
+        # Import images_to_pdf function
+        from utils.pdf_utils import images_to_pdf
+        images_to_pdf(image_paths, pdf_file_path)
+        
+        await status_message.edit_text("✅ Images combined successfully!")
+        
+        # Ask for filename
+        operation_info = f"Combined {len(image_files)} images into PDF!"
+        return await ask_for_filename(update, context, pdf_file_path, "pdf", operation_info)
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error combining images: {e}")
+
 def start_bot():
     """Start the bot with conflict prevention"""
     print("🔍 Testing PDF utilities import at startup...")
@@ -1065,6 +1169,8 @@ def start_bot():
             CommandHandler("split", split_command),
             CommandHandler("to_images", to_images_command),
             CommandHandler("merge_with", merge_with_command),
+            CommandHandler("convert_image", convert_image_command),
+            CommandHandler("combine_images", combine_images_command),
         ],
         states={
             WAITING_FOR_FILENAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_filename_input)]
