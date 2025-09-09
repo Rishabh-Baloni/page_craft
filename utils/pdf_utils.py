@@ -17,12 +17,24 @@ def merge_pdfs(pdf_files, output_path="merged.pdf"):
     Returns:
         str: Path to the merged PDF file
     """
+    if not pdf_files or len(pdf_files) == 0:
+        raise ValueError("At least one PDF file is required for merging")
+    
+    if len(pdf_files) == 1:
+        raise ValueError("At least two PDF files are required for merging")
+    
     writer = PdfWriter()
     
     for pdf_file in pdf_files:
-        reader = PdfReader(pdf_file)
-        for page in reader.pages:
-            writer.add_page(page)
+        if not os.path.exists(pdf_file):
+            raise FileNotFoundError(f"PDF file not found: {pdf_file}")
+        
+        try:
+            reader = PdfReader(pdf_file)
+            for page in reader.pages:
+                writer.add_page(page)
+        except Exception as e:
+            raise Exception(f"Error reading PDF file {pdf_file}: {e}")
     
     with open(output_path, 'wb') as output_file:
         writer.write(output_file)
