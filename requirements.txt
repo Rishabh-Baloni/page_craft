@@ -3,4 +3,3 @@ pypdf
 pdf2image
 python-docx
 reportlab
-docx2pdf

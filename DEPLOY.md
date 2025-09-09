@@ -105,7 +105,8 @@
 
 ### Word conversion not working
 - Ensure all dependencies are installed
-- Check that `docx2pdf` and system dependencies are available
+- Check that `python-docx` and `reportlab` packages are available
+- Word conversion uses pure Python libraries (Linux-compatible)
 
 ### PDF operations failing
 - Verify `poppler-utils` is installed (automatic on Render/Heroku)

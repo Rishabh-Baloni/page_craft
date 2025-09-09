@@ -117,7 +117,7 @@ def create_zip_from_images(image_paths, zip_path="images.zip"):
 
 def word_to_pdf(word_file, output_path="converted.pdf"):
     """
-    Convert Word document to PDF.
+    Convert Word document to PDF using Linux-compatible pure Python libraries.
     
     Args:
         word_file: Path to the input Word file (.docx, .doc)
@@ -127,33 +127,29 @@ def word_to_pdf(word_file, output_path="converted.pdf"):
         str: Path to the converted PDF file
     """
     try:
-        import docx2pdf
-        docx2pdf.convert(word_file, output_path)
+        from docx import Document
+        from reportlab.lib.pagesizes import letter
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        
+        # Read the Word document
+        doc = Document(word_file)
+        
+        # Create PDF
+        pdf_doc = SimpleDocTemplate(output_path, pagesize=letter)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip():
+                p = Paragraph(paragraph.text, styles['Normal'])
+                story.append(p)
+                story.append(Spacer(1, 12))
+        
+        pdf_doc.build(story)
         return output_path
-    except ImportError:
-        # Fallback method using python-docx and reportlab
-        try:
-            from docx import Document
-            from reportlab.lib.pagesizes import letter
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-            from reportlab.lib.styles import getSampleStyleSheet
-            
-            # Read the Word document
-            doc = Document(word_file)
-            
-            # Create PDF
-            pdf_doc = SimpleDocTemplate(output_path, pagesize=letter)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    p = Paragraph(paragraph.text, styles['Normal'])
-                    story.append(p)
-                    story.append(Spacer(1, 12))
-            
-            pdf_doc.build(story)
-            return output_path
-            
-        except ImportError:
-            raise Exception("Word to PDF conversion requires additional packages. This feature works when deployed on cloud platforms.")
+        
+    except ImportError as e:
+        raise Exception(f"Word to PDF conversion requires python-docx and reportlab packages: {e}")
+    except Exception as e:
+        raise Exception(f"Error converting Word document: {e}")
