@@ -2,9 +2,9 @@
 import os
 import zipfile
 from pypdf import PdfReader, PdfWriter
-from pdf2image import convert_from_path
-from PIL import Image
 import tempfile
+
+# Note: pdf2image and PIL imports moved to functions for memory optimization
 
 def merge_pdfs(pdf_files, output_path="merged.pdf"):
     """

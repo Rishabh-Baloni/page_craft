@@ -62,10 +62,31 @@ def check_memory_limit():
 def lazy_import_pdf_utils():
     """Lazy import PDF utilities to save memory"""
     try:
+        # Add current directory and parent directory to path for import resolution
+        import sys
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        if current_dir not in sys.path:
+            sys.path.insert(0, current_dir)
+            
         from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
+        # Test that functions are actually callable
+        if not all(callable(func) for func in [merge_pdfs, split_pdf, word_to_pdf]):
+            logging.error("PDF utility functions are not callable")
+            return None, None, None, None, None
         return merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
     except ImportError as e:
         logging.error(f"Failed to import PDF utilities: {e}")
+        print(f"PDF utils import error: {e}")  # Also print for debugging
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Python path: {sys.path[:3]}")
+        return None, None, None, None, None
+    except Exception as e:
+        logging.error(f"Unexpected error loading PDF utilities: {e}")
+        print(f"PDF utils unexpected error: {e}")  # Also print for debugging
         return None, None, None, None, None
 
 async def wake_service_on_activity():
@@ -991,6 +1012,16 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def start_bot():
     """Start the bot with conflict prevention"""
+    print("🔍 Testing PDF utilities import at startup...")
+    print(f"Current working directory: {os.getcwd()}")
+    
+    # Test PDF utilities import
+    merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf = lazy_import_pdf_utils()
+    if merge_pdfs is not None:
+        print("✅ PDF utilities loaded successfully")
+    else:
+        print("❌ PDF utilities failed to load")
+        
     BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_TOKEN')
     
     if BOT_TOKEN == 'YOUR_TOKEN':
