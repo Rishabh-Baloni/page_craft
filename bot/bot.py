@@ -132,7 +132,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📄 Page Craft Bot - Memory Optimized\n\n"
         "Upload files (max 10MB each, 5 files per user):\n"
         "• 📄 PDFs: /merge, /split, /to_images\n"
-        "• 📝 Word docs: Converts to PDF automatically\n"
+        "• �️ Images: /convert_image, /combine_images\n"
         "• /help - Full help\n\n"
         "Files are auto-numbered as uploaded."
     )
@@ -1179,7 +1179,7 @@ def start_bot():
         per_message=False
     )
     
-    # Create a global message handler for filename input (for Word conversions)
+    # Create a global message handler for filename input
     filename_input_handler = MessageHandler(
         filters.TEXT & ~filters.COMMAND, 
         handle_filename_input
@@ -1197,7 +1197,7 @@ def start_bot():
     # Add conversation handler for commands
     app.add_handler(command_filename_handler)
     
-    # Add global filename input handler (for Word conversions)
+    # Add global filename input handler
     app.add_handler(filename_input_handler)
     
     # Add a generic message handler for unknown commands/typos (must be last)
