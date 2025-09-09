@@ -9,6 +9,7 @@ A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF
 - **🔗 Reply Functionality**: Use reply commands on bot-generated files
 - **📋 File Management**: Auto-numbering, listing, and clearing files
 - **🎯 Smart Commands**: Typo detection and comprehensive help
+- **⚡ Auto-Wake**: Automatically wakes Render service on user activity (free tier)
 
 ## 🛠️ Quick Start
 

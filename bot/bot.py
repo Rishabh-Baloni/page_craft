@@ -3,6 +3,8 @@ import os
 import tempfile
 import logging
 import shutil
+import asyncio
+import httpx
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf, word_to_pdf, word_to_pdf
@@ -19,6 +21,28 @@ pending_files = {}
 
 # Performance optimization: limit file storage per user
 MAX_FILES_PER_USER = 20
+
+# Render self-wake mechanism
+RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', None)
+
+async def keep_service_alive():
+    """Ping the Render service to keep it awake"""
+    if not RENDER_URL:
+        return
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{RENDER_URL}/health")
+            if response.status_code == 200:
+                print(f"🔄 Service keepalive: {RENDER_URL}")
+    except Exception as e:
+        print(f"⚠️ Keepalive failed: {e}")
+
+async def wake_service_on_activity():
+    """Wake the service when bot receives activity"""
+    if RENDER_URL:
+        # Run keepalive in background without blocking
+        asyncio.create_task(keep_service_alive())
 
 def find_replied_pdf(update: Update, user_id: int):
     """Find the PDF file that was replied to"""
@@ -39,6 +63,9 @@ def find_replied_pdf(update: Update, user_id: int):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler"""
+    # Wake service on user activity
+    await wake_service_on_activity()
+    
     await update.message.reply_text(
         "📄 Page Craft Bot\n\n"
         "Upload files and use:\n"
@@ -50,6 +77,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command handler"""
+    # Wake service on user activity
+    await wake_service_on_activity()
+    
     help_message = """
 📄 Page Craft Bot Commands:
 
@@ -347,6 +377,9 @@ async def handle_word_document(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def handle_any_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle any document upload and route to appropriate handler"""
+    # Wake service on user activity
+    await wake_service_on_activity()
+    
     mime_type = update.message.document.mime_type
     file_name = update.message.document.file_name.lower() if update.message.document.file_name else ""
     

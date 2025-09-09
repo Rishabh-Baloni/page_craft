@@ -11,5 +11,7 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false  # This will be set manually in Render dashboard
+      - key: RENDER_EXTERNAL_URL
+        value: https://page-craft-bot.onrender.com  # Update this with your actual Render URL
     healthCheckPath: /health
     autoDeploy: true
