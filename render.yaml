@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: background_worker
     name: paper-craft-bot
     env: python
     buildCommand: |
@@ -11,5 +11,4 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false  # This will be set manually in Render dashboard
-    healthCheckPath: /
     autoDeploy: true
