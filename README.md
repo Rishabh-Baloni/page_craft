@@ -4,8 +4,10 @@ A powerful Telegram bot for document processing with Word-to-PDF conversion, PDF
 
 ## 🚀 Features
 
-- **📝 Word to PDF Conversion**: Upload .docx files for automatic PDF conversion
-- **📄 PDF Operations**: Merge, split, and convert PDFs to images
+- **📝 Professional Word to PDF**: High-quality conversion using LibreOffice CLI with full formatting preservation
+- **📄 PDF Operations**: Merge, split, and convert PDFs to images with professional quality
+- **🎨 Advanced Document Processing**: Preserves formatting, images, tables, headers, and complex layouts
+- **🔧 Smart Fallback System**: Uses LibreOffice → pypandoc → python-docx for maximum compatibility
 - **🔗 Reply Functionality**: Use reply commands on bot-generated files
 - **📋 File Management**: Auto-numbering, listing, and clearing files
 - **🎯 Smart Commands**: Typo detection and comprehensive help
