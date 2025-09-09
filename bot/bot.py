@@ -1029,14 +1029,32 @@ def start_bot():
         print("Set BOT_TOKEN environment variable or edit bot.py")
         return
     
-    # Try to clear any existing bot webhook first (in case it was set)
+    # Enhanced conflict prevention - clear webhooks and pending updates
     try:
         import telegram
         bot = telegram.Bot(token=BOT_TOKEN)
-        # Clear webhook to ensure polling works
+        
+        print("🔧 Checking for webhook conflicts...")
+        
+        # Get current webhook info
         import asyncio
-        asyncio.get_event_loop().run_until_complete(bot.delete_webhook(drop_pending_updates=True))
-        print("✅ Cleared any existing webhook")
+        loop = asyncio.get_event_loop()
+        webhook_info = loop.run_until_complete(bot.get_webhook_info())
+        
+        if webhook_info.url:
+            print(f"🔍 Found existing webhook: {webhook_info.url}")
+            print("🗑️ Clearing webhook to enable polling...")
+            loop.run_until_complete(bot.delete_webhook(drop_pending_updates=True))
+            print("✅ Webhook cleared successfully")
+        else:
+            print("ℹ️ No webhook found - clearing pending updates...")
+            loop.run_until_complete(bot.delete_webhook(drop_pending_updates=True))
+            print("✅ Ready for polling")
+            
+        # Small delay to ensure Telegram servers process the webhook deletion
+        import time
+        time.sleep(2)
+        
     except Exception as webhook_error:
         print(f"⚠️ Could not clear webhook: {webhook_error}")
     
