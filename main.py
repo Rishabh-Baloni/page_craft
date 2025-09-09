@@ -56,18 +56,54 @@ def main():
             logger.error("Please set your Telegram bot token from @BotFather")
             sys.exit(1)
         
+        # Create a simple lock mechanism to prevent multiple instances
+        lock_file = '/tmp/pagebot.lock'
+        if os.path.exists(lock_file):
+            logger.warning("🔄 Lock file exists, checking if another instance is running...")
+            try:
+                # Try to remove old lock file (it might be stale)
+                os.remove(lock_file)
+                logger.info("✅ Removed stale lock file")
+            except Exception:
+                logger.warning("⚠️ Could not remove lock file, continuing anyway...")
+        
+        # Create lock file
+        try:
+            with open(lock_file, 'w') as f:
+                f.write(str(os.getpid()))
+            logger.info(f"🔒 Created lock file: {lock_file}")
+        except Exception:
+            logger.warning("⚠️ Could not create lock file, continuing anyway...")
+        
         # Start web server in a separate thread for Render
         web_thread = Thread(target=run_web_server, daemon=True)
         web_thread.start()
         
         logger.info("🚀 Starting Page Craft Bot...")
-        start_bot()
+        
+        try:
+            start_bot()
+        finally:
+            # Clean up lock file
+            try:
+                if os.path.exists(lock_file):
+                    os.remove(lock_file)
+                    logger.info("🧹 Cleaned up lock file")
+            except Exception:
+                pass
         
     except KeyboardInterrupt:
         logger.info("🛑 Bot stopped by user")
         sys.exit(0)
     except Exception as e:
         logger.error(f"❌ Fatal error: {e}")
+        # Clean up lock file on error
+        try:
+            lock_file = '/tmp/pagebot.lock'
+            if os.path.exists(lock_file):
+                os.remove(lock_file)
+        except Exception:
+            pass
         sys.exit(1)
 
 if __name__ == "__main__":

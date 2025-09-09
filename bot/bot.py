@@ -5,9 +5,10 @@ import logging
 import shutil
 import asyncio
 import httpx
+import time
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
-from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf, word_to_pdf, word_to_pdf
+from utils.pdf_utils import merge_pdfs, split_pdf, pdf_to_images, create_zip_from_images, word_to_pdf
 
 # Configure minimal logging to reduce overhead
 logging.basicConfig(level=logging.WARNING)
@@ -886,13 +887,24 @@ async def to_images_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Error converting PDF: {error_msg}")
 
 def start_bot():
-    """Start the bot"""
+    """Start the bot with conflict prevention"""
     BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_TOKEN')
     
     if BOT_TOKEN == 'YOUR_TOKEN':
         print("❌ Please set your bot token!")
         print("Set BOT_TOKEN environment variable or edit bot.py")
         return
+    
+    # Try to clear any existing bot webhook first (in case it was set)
+    try:
+        import telegram
+        bot = telegram.Bot(token=BOT_TOKEN)
+        # Clear webhook to ensure polling works
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(bot.delete_webhook(drop_pending_updates=True))
+        print("✅ Cleared any existing webhook")
+    except Exception as webhook_error:
+        print(f"⚠️ Could not clear webhook: {webhook_error}")
     
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     
@@ -958,5 +970,69 @@ def start_bot():
     
     app.add_handler(MessageHandler(filters.TEXT & filters.COMMAND, handle_unknown_command))
     
+    # Add error handler for the application
+    async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle errors in the bot"""
+        logger = logging.getLogger(__name__)
+        
+        # Log the error
+        logger.error(f"Exception while handling an update: {context.error}")
+        
+        # Handle specific types of errors
+        if "Conflict" in str(context.error):
+            logger.warning("Conflict error detected - another bot instance may be running")
+            # Don't send a message to user, just log it
+            return
+        elif "timed out" in str(context.error).lower():
+            logger.warning("Timeout error - network issues")
+            return
+        
+        # For other errors, try to inform the user if possible
+        try:
+            if update and update.effective_message:
+                await update.effective_message.reply_text(
+                    "❌ Sorry, something went wrong. Please try again later."
+                )
+        except Exception:
+            # If we can't even send an error message, just log it
+            pass
+    
+    app.add_error_handler(error_handler)
+    
     print("🚀 Page Craft Bot is starting...")
-    app.run_polling()
+    
+    # Run with error handling to prevent conflicts
+    try:
+        app.run_polling(
+            drop_pending_updates=True,  # Clear any pending updates
+            allowed_updates=Update.ALL_TYPES,
+            poll_interval=2.0,  # Increase poll interval to reduce conflicts
+            timeout=20,  # Increase timeout
+            bootstrap_retries=3,  # Retry connection failures
+            read_timeout=30,
+            write_timeout=30,
+            connect_timeout=30
+        )
+    except Exception as e:
+        print(f"❌ Bot startup failed: {e}")
+        if "Conflict" in str(e):
+            print("🔄 Another bot instance may be running. Retrying in 30 seconds...")
+            import time
+            time.sleep(30)
+            # Try again with even higher timeouts
+            try:
+                app.run_polling(
+                    drop_pending_updates=True,
+                    allowed_updates=Update.ALL_TYPES,
+                    poll_interval=5.0,
+                    timeout=30,
+                    bootstrap_retries=5,
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60
+                )
+            except Exception as retry_error:
+                print(f"❌ Bot failed to start after retry: {retry_error}")
+                raise retry_error
+        else:
+            raise e
