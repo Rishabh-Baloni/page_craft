@@ -122,4 +122,4 @@ To update your deployed bot:
 
 ---
 
-**Your Document Bot MVP is now ready for production! 🎉**
+**Your Page Craft Bot is now ready for production! 🎉**

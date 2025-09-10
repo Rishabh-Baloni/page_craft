@@ -1,6 +1,17 @@
 # 📄 Page Craft Bot
 
-A memory-optimized Telegram bot for PDF processing and document management, designed for deployment on Render's free tier.
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-blue.svg)](https://telegram.org/)
+[![Deploy to Render](https://img.shields.io/badge/Deploy-Render-purple.svg)](https://render.com)
+
+A memory-optimized Telegram bot for PDF processing and image conversion, designed for deployment on Render's free tier.
+
+## 🎯 Quick Demo
+
+1. **Send a PDF** → Reply with `/split 1-3` → Get pages 1-3 as new PDF
+2. **Send images** → Use `/combine_images` → Get single PDF with all images
+3. **Send PDF** → Reply with `/to_images` → Get all pages as JPEG files
 
 ## 🚀 Features
 
@@ -182,6 +193,27 @@ echo $BOT_TOKEN
 - Auto-wake system implemented
 - All deployment tests passing
 
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👤 Author
+
+**Rishabh Baloni**
+- GitHub: [@Rishabh-Baloni](https://github.com/Rishabh-Baloni)
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## ⭐ Support
+
+If you found this project helpful, please give it a ⭐ on GitHub!
+
 ---
 
-**Made with ❤️ for efficient PDF processing on Telegram**
+**Built with ❤️ for efficient PDF and image processing on Telegram**
