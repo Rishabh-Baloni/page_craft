@@ -36,8 +36,9 @@ MAX_TOTAL_MEMORY_MB = 200  # Total memory limit
 RENDER_URL = os.getenv('RENDER_EXTERNAL_URL', None)
 AUTO_WAKE_ENABLED = True
 WAKE_URLS = [
-    "https://page-craft.onrender.com",
-    "https://page-craft.onrender.com/health"
+    "https://page-craft-bot.onrender.com",
+    "https://page-craft-bot.onrender.com/health",
+    "https://page-craft-bot.onrender.com/"
 ]
 
 def get_memory_usage():
@@ -147,19 +148,26 @@ def start_auto_wake_service():
         """Keep service awake with periodic pings"""
         while True:
             try:
-                # Wait 8 minutes between wake-ups (Render sleeps after 15 min)
-                time.sleep(480)  
+                # Wait 5 minutes between wake-ups (more frequent for reliability)
+                time.sleep(300)  # 5 minutes instead of 8
                 
                 # Ping multiple endpoints
                 import urllib.request
+                wake_success = False
                 for url in WAKE_URLS:
                     try:
-                        response = urllib.request.urlopen(url, timeout=5)
+                        print(f"🔄 Auto-wake ping to: {url}")
+                        response = urllib.request.urlopen(url, timeout=10)
                         if response.getcode() == 200:
-                            print("🔄 Auto-wake ping successful")
+                            print(f"✅ Auto-wake successful via {url}")
+                            wake_success = True
                             break
-                    except:
+                    except Exception as url_error:
+                        print(f"⚠️ Wake ping failed for {url}: {url_error}")
                         continue
+                
+                if not wake_success:
+                    print("❌ All wake URLs failed - service may be sleeping")
                         
             except Exception as e:
                 print(f"⚠️ Auto-wake error: {e}")
@@ -168,7 +176,7 @@ def start_auto_wake_service():
     try:
         wake_thread = threading.Thread(target=periodic_wake, daemon=True)
         wake_thread.start()
-        print("🚀 Auto-wake service started (8-minute intervals)")
+        print("🚀 Auto-wake service started (5-minute intervals)")
     except Exception as e:
         print(f"⚠️ Failed to start auto-wake: {e}")
 
