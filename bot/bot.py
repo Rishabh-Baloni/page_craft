@@ -282,9 +282,6 @@ After processing, you'll be asked to name your file!
 • PDF files (merge, split, convert to images)
 • Image files (JPG, PNG, GIF, BMP → convert/combine to PDF)
 
-⚠️ **REMOVED Features:**
-• Word to PDF conversion (removed due to file path issues)
-
 📁 Files are numbered in upload order.
     """
     await update.message.reply_text(help_message)

@@ -9,8 +9,9 @@ A memory-optimized Telegram bot for PDF processing and document management, desi
 - **Split PDFs**: Extract specific pages or page ranges  
 - **Reply System**: Reply to any PDF message with commands
 
-### 📝 Document Conversion
-- **Word to PDF**: Automatic conversion of .docx and .doc files
+### �️ Image Processing
+- **Image to PDF**: Convert single or multiple images to PDF
+- **PDF to Images**: Extract pages as high-quality JPEG images
 - **Custom Filenames**: User-friendly file naming system
 
 ### 🔧 Advanced Features
@@ -24,8 +25,9 @@ A memory-optimized Telegram bot for PDF processing and document management, desi
 - **Python 3.8+**
 - **python-telegram-bot 20.3** (compatibility-tested version)
 - **pypdf 3.17.4** - PDF processing
-- **python-docx 1.1.0** - Word document handling  
+- **pdf2image 1.16.3** - PDF to image conversion
 - **reportlab 4.0.8** - PDF generation
+- **Pillow 10.0.1** - Image processing
 - **psutil 5.9.5** - Memory monitoring
 
 ## 📋 Quick Start
@@ -146,7 +148,7 @@ def lazy_import_pdf_utils():
 ### File Limits
 - **Max Files per User**: 5 concurrent
 - **Max File Size**: 10MB per file
-- **Supported Formats**: PDF, DOCX, DOC
+- **Supported Formats**: PDF, JPG, PNG, GIF, BMP
 
 ## 🐛 Troubleshooting
 
