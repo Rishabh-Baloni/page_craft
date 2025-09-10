@@ -89,44 +89,41 @@ def pdf_to_images(pdf_path, output_dir=None):
     Convert PDF pages to images with memory optimization for free tier.
     
     Args:
-        pdf_file: Path to the input PDF file
+        pdf_path: Path to the input PDF file
         output_dir: Directory to save images
-        format: Image format (PNG or JPEG)
     
     Returns:
         list: List of image file paths
     """
     try:
-        # Memory optimized PDF to images conversion
         from pdf2image import convert_from_path
         
         if output_dir is None:
             output_dir = tempfile.mkdtemp()
         
-        # Convert with memory optimization settings
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Convert PDF to images without output_folder parameter
         images = convert_from_path(
             pdf_path,
-            dpi=150,  # Lower DPI to save memory
-            output_folder=output_dir,
-            fmt='JPEG',  # JPEG uses less memory than PNG
-            jpegopt={'quality': 85, 'progressive': True, 'optimize': True},
-            thread_count=1,  # Single thread to limit memory
+            dpi=150,
+            fmt='JPEG',
+            thread_count=1,
             poppler_path=None
         )
         
-        # Save images with optimized settings
+        # Save images manually
         image_paths = []
         for i, image in enumerate(images):
             image_path = os.path.join(output_dir, f"page_{i+1}.jpg")
-            # Optimize image size for memory
             image.save(image_path, "JPEG", quality=85, optimize=True)
             image_paths.append(image_path)
         
         return image_paths
         
     except ImportError:
-        raise RuntimeError("PDF to images conversion requires pdf2image package. "
-                         "Install with: pip install pdf2image")
+        raise RuntimeError("PDF to images conversion requires pdf2image package")
     except Exception as e:
         raise RuntimeError(f"Error converting PDF to images: {e}")
 
