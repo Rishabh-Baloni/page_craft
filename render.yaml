@@ -1,3 +1,4 @@
+pythonVersion: 3.12
 services:
   - type: web
     name: page-craft-bot
