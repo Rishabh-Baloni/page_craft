@@ -145,19 +145,35 @@ def start_auto_wake_service():
     import time
     
     def periodic_wake():
-        """Keep service awake with periodic pings"""
+        """Keep service awake with aggressive pings to prevent 15-min timeout"""
         while True:
             try:
-                # Wait 5 minutes between wake-ups (more frequent for reliability)
-                time.sleep(300)  # 5 minutes instead of 8
+                # CRITICAL: Wait 10 minutes (under 15-min Render timeout)
+                # Render free tier sleeps after 15 min of no HTTP activity
+                time.sleep(600)  # 10 minutes = 600 seconds
                 
-                # Ping multiple endpoints
+                # Ping multiple endpoints aggressively
                 import urllib.request
+                import socket
+                
+                # Set socket timeout globally
+                socket.setdefaulttimeout(15)
+                
                 wake_success = False
                 for url in WAKE_URLS:
                     try:
                         print(f"🔄 Auto-wake ping to: {url}")
-                        response = urllib.request.urlopen(url, timeout=10)
+                        
+                        # Create request with headers to look like real traffic
+                        req = urllib.request.Request(
+                            url,
+                            headers={
+                                'User-Agent': 'PageCraftBot-KeepAlive/1.0',
+                                'Accept': 'text/html,application/json'
+                            }
+                        )
+                        
+                        response = urllib.request.urlopen(req, timeout=15)
                         if response.getcode() == 200:
                             print(f"✅ Auto-wake successful via {url}")
                             wake_success = True
@@ -168,6 +184,7 @@ def start_auto_wake_service():
                 
                 if not wake_success:
                     print("❌ All wake URLs failed - service may be sleeping")
+                    print("💡 TIP: Use external monitoring service like UptimeRobot!")
                         
             except Exception as e:
                 print(f"⚠️ Auto-wake error: {e}")
@@ -176,7 +193,9 @@ def start_auto_wake_service():
     try:
         wake_thread = threading.Thread(target=periodic_wake, daemon=True)
         wake_thread.start()
-        print("🚀 Auto-wake service started (5-minute intervals)")
+        print("🚀 Auto-wake service started (10-minute intervals)")
+        print("⚠️ NOTE: Internal pings may not prevent sleeping on Render free tier")
+        print("💡 RECOMMENDED: Use UptimeRobot.com for external monitoring")
     except Exception as e:
         print(f"⚠️ Failed to start auto-wake: {e}")
 

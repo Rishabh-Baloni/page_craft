@@ -103,6 +103,18 @@ RENDER_EXTERNAL_URL=https://your-app-name.onrender.com
 - **Build Command**: `pip install -r requirements.txt`
 - **Start Command**: `python main.py`
 
+### 4. Keep Your Bot Alive 24/7 ⚠️ IMPORTANT
+**Render free tier sleeps after 15 minutes of inactivity.**
+
+**Quick Fix** (5 minutes setup):
+1. Go to [UptimeRobot.com](https://uptimerobot.com) (FREE)
+2. Create account → Add New Monitor
+3. Set URL: `https://your-app-name.onrender.com/health`
+4. Interval: 5 minutes
+5. Done! Bot stays active 24/7 ✅
+
+📖 **[Read Full Keep-Alive Guide](KEEP_ALIVE_GUIDE.md)** for all solutions
+
 ## 🤖 Bot Commands
 
 ### Basic Commands
