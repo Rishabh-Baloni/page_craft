@@ -639,84 +639,10 @@ async def merge_with_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     merge_list += f"\n💡 **Usage:** Reply with /merge to include this PDF in merge order"
     
     await update.message.reply_text(merge_list)
-    
-    file_list += "\n📋 Use commands:\n"
-    file_list += "• /merge 1,2,3\n• /split 2 5-10\n• /to_images 1"
-    
-    await update.message.reply_text(file_list)
 
-async def clear_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Clear all uploaded files"""
-    user_id = update.effective_user.id
-    
-    if user_id in user_files:
-        # Clean up temporary files
-        for file_info in user_files[user_id]:
-            try:
-                if os.path.exists(file_info['path']):
-                    os.remove(file_info['path'])
-            except Exception:
-                pass
-        
-        del user_files[user_id]
-        await update.message.reply_text("✅ All your uploaded files have been cleared!")
-    else:
-        await update.message.reply_text("No files to clear!")
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle uploaded PDF documents"""
-    document = update.message.document
-    user_id = update.effective_user.id
-    
-    # Check if it's a PDF
-    if not document.file_name.lower().endswith('.pdf'):
-        await update.message.reply_text("Please send only PDF files!")
-        return
-    
-    try:
-        # Download the file
-        file = await context.bot.get_file(document.file_id)
-        
-        # Create temp directory if not exists
-        temp_dir = tempfile.mkdtemp()
-        file_path = os.path.join(temp_dir, document.file_name)
-        
-        # Download file
-        await file.download_to_drive(file_path)
-        
-        # Store file info
-        if user_id not in user_files:
-            user_files[user_id] = []
-        
-        file_info = {
-            'name': document.file_name,
-            'path': file_path,
-            'message_id': update.message.message_id  # Store message ID for reply detection
-        }
-        user_files[user_id].append(file_info)
-        
-        # Show updated file list
-        file_list = ""
-        for i, file_info in enumerate(user_files[user_id], 1):
-            file_list += f"{i}. {file_info['name']}\n"
-        
-        await update.message.reply_text(
-            f"✅ PDF received: {update.message.document.file_name}\n\n"
-            f"📁 Your uploaded PDFs:\n{file_list}\n"
-            f"📋 Use commands:\n"
-            f"• /merge [numbers] - e.g., /merge 1,3,2\n"
-            f"• /split [number] [pages] - e.g., /split 2 5-8\n"
-            f"• /to_images [number] - e.g., /to_images 1\n"
-            f"• /list - Show all uploaded files\n"
-            f"• /clear - Clear all files\n\n"
-            f"💡 **NEW: Reply Feature!**\n"
-            f"• Reply with: /merge\n"
-            f"• Reply with: /split pages\n"
-            f"• Reply with: /to_images"
-        )
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error processing PDF: {str(e)}")
+
+
 
 async def merge_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Memory-optimized merge PDF command handler"""
