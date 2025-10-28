@@ -27,17 +27,41 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     
     def _handle_request(self):
         """Common handler for all HTTP methods"""
-        if self.path == '/health' or self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.end_headers()
-            self.wfile.write(b'Page Craft Bot is running!')
-        else:
-            self.send_response(404)
-            self.end_headers()
+        try:
+            if self.path == '/health' or self.path == '/':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH, TRACE, CONNECT')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+                self.end_headers()
+                
+                # Send JSON response like FrostByte
+                response = {
+                    'status': 'running',
+                    'bot_name': 'Page Craft Bot',
+                    'message': 'Page Craft Bot is running!'
+                }
+                import json
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            else:
+                self.send_response(200)  # Changed from 404 to 200
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {'status': 'ok', 'message': 'Page Craft Bot'}
+                import json
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+        except Exception as e:
+            logger.error(f"Error handling request: {e}")
+            try:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = {'status': 'ok', 'error': str(e)}
+                import json
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+            except:
+                pass
     
     def do_GET(self):
         self._handle_request()
