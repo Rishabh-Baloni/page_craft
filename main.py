@@ -57,6 +57,15 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
         self._handle_request()
     
+    def do_PATCH(self):
+        self._handle_request()
+    
+    def do_TRACE(self):
+        self._handle_request()
+    
+    def do_CONNECT(self):
+        self._handle_request()
+    
     def log_message(self, format, *args):
         # Suppress HTTP server logs to reduce noise
         pass
