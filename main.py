@@ -25,15 +25,37 @@ logger = logging.getLogger(__name__)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     """Simple HTTP handler for Render health checks"""
     
-    def do_GET(self):
+    def _handle_request(self):
+        """Common handler for all HTTP methods"""
         if self.path == '/health' or self.path == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/plain')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
             self.end_headers()
             self.wfile.write(b'Page Craft Bot is running!')
         else:
             self.send_response(404)
             self.end_headers()
+    
+    def do_GET(self):
+        self._handle_request()
+    
+    def do_POST(self):
+        self._handle_request()
+    
+    def do_PUT(self):
+        self._handle_request()
+    
+    def do_DELETE(self):
+        self._handle_request()
+    
+    def do_OPTIONS(self):
+        self._handle_request()
+    
+    def do_HEAD(self):
+        self._handle_request()
     
     def log_message(self, format, *args):
         # Suppress HTTP server logs to reduce noise
