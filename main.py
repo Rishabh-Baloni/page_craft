@@ -219,14 +219,7 @@ def health_check():
         'mode': 'webhook',
         'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None
     }), 200
-    except Exception as e:
-        logger.error(f"Error in health check: {e}")
-        return jsonify({
-            'status': 'healthy',
-            'bot_username': None,
-            'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None,
-            'mode': 'webhook'
-        }), 200
+
 
 def auto_wake():
     """Auto-wake function to prevent Render free tier from sleeping"""
