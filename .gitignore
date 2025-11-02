@@ -8,3 +8,7 @@ __pycache__/
 *.zip
 temp_*
 .DS_Store
+
+# Backup files (old polling mode)
+main_old.py
+bot/bot_polling_backup.py

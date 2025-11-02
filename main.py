@@ -1,162 +1,282 @@
 #!/usr/bin/env python3
 """
-Page Craft Bot - Entry Point
-A powerful Telegram bot for document processing and Word-to-PDF conversion.
+Page Craft Bot - Webhook Mode (Like FrostByte)
+A powerful Telegram bot for document processing with webhook support
 """
 
 import os
 import sys
 import logging
-from threading import Thread
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from bot.bot import start_bot
+import threading
+import time
+import queue
+import asyncio
+from flask import Flask, request, jsonify
+from telegram import Update
+from telegram.ext import Application
+from bot.bot_handlers import setup_handlers
 
-# Configure production logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
-
 logger = logging.getLogger(__name__)
 
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    """Simple HTTP handler for Render health checks"""
-    
-    def _handle_request(self):
-        """Bulletproof handler for UptimeRobot and all monitoring services"""
+# Flask app
+app = Flask(__name__)
+
+# Thread-safe update queue
+update_queue = queue.Queue()
+_bot_thread = None
+_initialized = False
+
+# Environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g., https://page-craft-bot.onrender.com
+WEBHOOK_PORT = int(os.getenv("PORT", "10000"))
+
+# Global application instance
+telegram_app = None
+
+def ensure_bot_initialized():
+    """Ensure the bot is initialized before processing requests"""
+    global telegram_app, _initialized, _bot_thread
+    if not _initialized:
         try:
-            # Always respond with 200 OK for any path/method
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', '*')
-            self.send_header('Access-Control-Allow-Headers', '*')
-            self.send_header('Cache-Control', 'no-cache')
-            self.end_headers()
+            setup_telegram_app()
+            _bot_thread = threading.Thread(target=run_bot_thread, daemon=True)
+            _bot_thread.start()
+            _initialized = True
+            logger.info("Bot initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize bot: {e}")
+            raise
+
+def setup_telegram_app():
+    """Initialize the Telegram application with handlers"""
+    global telegram_app
+    
+    telegram_app = Application.builder().token(BOT_TOKEN).build()
+    
+    # Setup all handlers from bot module
+    setup_handlers(telegram_app)
+    
+    logger.info("Telegram application initialized with all handlers")
+
+def run_bot_thread():
+    """Run the bot in a separate thread with its own event loop"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    async def process_updates():
+        await telegram_app.initialize()
+        while True:
+            try:
+                # Get update from queue with timeout
+                update = update_queue.get(timeout=1)
+                await telegram_app.process_update(update)
+                update_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Error processing update in bot thread: {e}")
+    
+    try:
+        loop.run_until_complete(process_updates())
+    except Exception as e:
+        logger.error(f"Bot thread error: {e}")
+    finally:
+        loop.close()
+
+# Flask routes
+@app.route('/', methods=['GET'])
+def home():
+    """Home page with bot information"""
+    return jsonify({
+        'status': 'running',
+        'bot_name': 'Page Craft Bot',
+        'mode': 'webhook',
+        'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None,
+        'endpoints': {
+            'webhook': '/webhook',
+            'set_webhook': '/set_webhook',
+            'delete_webhook': '/delete_webhook',
+            'webhook_info': '/webhook_info',
+            'health': '/health'
+        }
+    }), 200
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """Handle incoming webhook updates from Telegram"""
+    if request.method == 'POST':
+        try:
+            # Ensure bot is initialized
+            ensure_bot_initialized()
             
-            # Only send body for non-HEAD requests
-            if self.command != 'HEAD':
-                response = {
-                    'status': 'running',
-                    'bot_name': 'Page Craft Bot',
-                    'uptime': 'active',
-                    'path': self.path,
-                    'method': self.command
-                }
-                import json
-                self.wfile.write(json.dumps(response).encode('utf-8'))
+            # Parse the incoming update
+            update = Update.de_json(request.get_json(), telegram_app.bot)
+            
+            # Log the update details
+            if update.message:
+                message_type = "text" if update.message.text else "document" if update.message.document else "other"
+                content = update.message.text[:50] if update.message.text else "N/A"
+                logger.info(f"Received update: {update.update_id} - Type: {message_type} - Content: {content}")
+            else:
+                logger.info(f"Received update: {update.update_id} - Type: Unknown")
+            
+            # Add update to queue for processing by bot thread
+            update_queue.put(update)
+            logger.info(f"Successfully queued update: {update.update_id}")
+            return jsonify({'status': 'ok'}), 200
                 
         except Exception as e:
-            # Fallback - always return 200 even on errors
-            try:
-                self.send_response(200)
-                self.send_header('Content-type', 'text/plain')
-                self.end_headers()
-                if self.command != 'HEAD':
-                    self.wfile.write(b'OK')
-            except:
-                pass  # Ignore any further errors
+            logger.error(f"Error processing webhook: {e}")
+            logger.error(f"Update data: {request.get_json()}")
+            return jsonify({'error': str(e)}), 500
     
-    def do_GET(self):
-        self._handle_request()
-    
-    def do_POST(self):
-        self._handle_request()
-    
-    def do_PUT(self):
-        self._handle_request()
-    
-    def do_DELETE(self):
-        self._handle_request()
-    
-    def do_OPTIONS(self):
-        self._handle_request()
-    
-    def do_HEAD(self):
-        self._handle_request()
-    
-    def do_PATCH(self):
-        self._handle_request()
-    
-    def do_TRACE(self):
-        self._handle_request()
-    
-    def do_CONNECT(self):
-        self._handle_request()
-    
-    def log_message(self, format, *args):
-        # Suppress HTTP server logs to reduce noise
-        pass
+    return jsonify({'error': 'Method not allowed'}), 405
 
-def run_web_server():
-    """Run a simple web server for Render's port requirements"""
-    port = int(os.environ.get('PORT', 10000))
-    server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    logger.info(f"🌐 Health check server started on port {port}")
-    server.serve_forever()
-
-def main():
-    """Main entry point for the bot"""
+@app.route('/set_webhook', methods=['GET', 'POST'])
+def set_webhook():
+    """Set the webhook URL with Telegram"""
     try:
-        # Check if bot token is provided
-        bot_token = os.getenv('BOT_TOKEN')
-        if not bot_token or bot_token == 'your_telegram_bot_token_here':
-            logger.error("❌ BOT_TOKEN environment variable not set!")
-            logger.error("Please set your Telegram bot token from @BotFather")
-            sys.exit(1)
+        if not WEBHOOK_URL:
+            return jsonify({'error': 'WEBHOOK_URL environment variable not set'}), 400
         
-        # Create a simple lock mechanism to prevent multiple instances
-        lock_file = '/tmp/pagebot.lock'
-        if os.path.exists(lock_file):
-            logger.warning("🔄 Lock file exists, checking if another instance is running...")
-            try:
-                # Try to remove old lock file (it might be stale)
-                os.remove(lock_file)
-                logger.info("✅ Removed stale lock file")
-            except Exception:
-                logger.warning("⚠️ Could not remove lock file, continuing anyway...")
+        webhook_url = f"{WEBHOOK_URL}/webhook"
         
-        # Create lock file
-        try:
-            with open(lock_file, 'w') as f:
-                f.write(str(os.getpid()))
-            logger.info(f"🔒 Created lock file: {lock_file}")
-        except Exception:
-            logger.warning("⚠️ Could not create lock file, continuing anyway...")
+        # Use requests to set webhook
+        import requests
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+        response = requests.post(url, json={'url': webhook_url})
         
-        # Start web server in a separate thread for Render
-        web_thread = Thread(target=run_web_server, daemon=True)
-        web_thread.start()
-        
-        logger.info("🚀 Starting Page Craft Bot...")
-        
-        try:
-            start_bot()
-        finally:
-            # Clean up lock file
-            try:
-                if os.path.exists(lock_file):
-                    os.remove(lock_file)
-                    logger.info("🧹 Cleaned up lock file")
-            except Exception:
-                pass
-        
-    except KeyboardInterrupt:
-        logger.info("🛑 Bot stopped by user")
-        sys.exit(0)
+        if response.status_code == 200:
+            logger.info(f"Webhook set successfully to {webhook_url}")
+            return jsonify({
+                'status': 'success',
+                'message': f'Webhook set to {webhook_url}',
+                'webhook_url': webhook_url
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to set webhook', 'details': response.text}), 500
+            
     except Exception as e:
-        logger.error(f"❌ Fatal error: {e}")
-        # Clean up lock file on error
-        try:
-            lock_file = '/tmp/pagebot.lock'
-            if os.path.exists(lock_file):
-                os.remove(lock_file)
-        except Exception:
-            pass
-        sys.exit(1)
+        logger.error(f"Error setting webhook: {e}")
+        return jsonify({'error': str(e)}), 500
 
-if __name__ == "__main__":
-    main()
+@app.route('/delete_webhook', methods=['GET', 'POST'])
+def delete_webhook():
+    """Remove the webhook from Telegram"""
+    try:
+        # Ensure bot is initialized
+        ensure_bot_initialized()
+        
+        result = asyncio.run(telegram_app.bot.delete_webhook())
+        
+        if result:
+            logger.info("Webhook deleted successfully")
+            return jsonify({
+                'status': 'success',
+                'message': 'Webhook deleted successfully'
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to delete webhook'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error deleting webhook: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/webhook_info', methods=['GET'])
+def webhook_info():
+    """Get current webhook information from Telegram"""
+    try:
+        # Use requests to get webhook info
+        import requests
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/getWebhookInfo"
+        response = requests.get(url)
+        
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({
+                'status': 'success',
+                'webhook_info': data['result']
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to get webhook info'}), 500
+
+    except Exception as e:
+        logger.error(f"Error getting webhook info: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Health check endpoint for monitoring services"""
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'bot_username': telegram_app.bot.username if telegram_app and telegram_app.bot else None,
+            'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None,
+            'mode': 'webhook'
+        }), 200
+    except Exception as e:
+        logger.error(f"Error in health check: {e}")
+        return jsonify({
+            'status': 'healthy',
+            'bot_username': None,
+            'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None,
+            'mode': 'webhook'
+        }), 200
+
+def auto_wake():
+    """Auto-wake function to prevent Render free tier from sleeping"""
+    while True:
+        try:
+            time.sleep(840)  # 14 minutes
+            if WEBHOOK_URL:
+                import requests
+                requests.get(f"{WEBHOOK_URL}/health", timeout=10)
+                logger.info("Auto-wake ping sent")
+        except Exception as e:
+            logger.error(f"Auto-wake error: {e}")
+
+def create_app():
+    """Create and configure the Flask application"""
+    # Validate environment variables
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN environment variable not set")
+        sys.exit(1)
+    
+    if not WEBHOOK_URL:
+        logger.warning("WEBHOOK_URL environment variable not set - webhook mode may not work properly")
+    
+    # Setup Telegram application
+    setup_telegram_app()
+    
+    # Start auto-wake system
+    wake_thread = threading.Thread(target=auto_wake, daemon=True)
+    wake_thread.start()
+    logger.info("Auto-wake system started")
+    
+    logger.info(f"Telegram application initialized successfully")
+    logger.info(f"Webhook URL will be: {WEBHOOK_URL}/webhook")
+    
+    return app
+
+if __name__ == '__main__':
+    # Create and configure the app
+    app = create_app()
+    
+    logger.info(f"🚀 Starting Page Craft Bot in WEBHOOK mode on port {WEBHOOK_PORT}")
+    logger.info(f"🌐 Webhook URL: {WEBHOOK_URL}/webhook")
+    logger.info(f"💡 After deployment, visit {WEBHOOK_URL}/set_webhook to activate webhook")
+    
+    # Run Flask app
+    port = int(os.environ.get('PORT', WEBHOOK_PORT))
+    app.run(
+        host='0.0.0.0',
+        port=port,
+        debug=False
+    )
