@@ -214,13 +214,11 @@ def webhook_info():
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint for monitoring services"""
-    try:
-        return jsonify({
-            'status': 'healthy',
-            'bot_username': telegram_app.bot.username if telegram_app and telegram_app.bot else None,
-            'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None,
-            'mode': 'webhook'
-        }), 200
+    return jsonify({
+        'status': 'healthy',
+        'mode': 'webhook',
+        'webhook_url': f"{WEBHOOK_URL}/webhook" if WEBHOOK_URL else None
+    }), 200
     except Exception as e:
         logger.error(f"Error in health check: {e}")
         return jsonify({
